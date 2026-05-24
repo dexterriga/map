@@ -4,7 +4,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from bot.config import DATABASE_URL
 
-engine = create_engine(DATABASE_URL, echo=False)
+_is_postgres = DATABASE_URL.startswith("postgresql")
+
+if _is_postgres:
+    url = DATABASE_URL
+    if "sslmode" not in url:
+        sep = "&" if "?" in url else "?"
+        url += f"{sep}sslmode=require"
+    engine = create_engine(url, echo=False, pool_pre_ping=True)
+else:
+    engine = create_engine(
+        DATABASE_URL, echo=False,
+        connect_args={"check_same_thread": False},
+    )
+
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 Base = declarative_base()
 
@@ -41,21 +54,22 @@ def init_db():
 
 
 def _migrate_db():
-    """Add missing columns to existing tables (SQLite migration)."""
+    """Add missing columns to existing tables (works with SQLite and PostgreSQL)."""
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
+    _is_pg = DATABASE_URL.startswith("postgresql")
     migrations = {
         "events": [
             ("ticket_url", "VARCHAR(1000)"),
             ("ticket_price_points", "INTEGER DEFAULT 0"),
-            ("is_featured", "BOOLEAN DEFAULT 0"),
+            ("is_featured", "BOOLEAN DEFAULT false" if _is_pg else "BOOLEAN DEFAULT 0"),
             ("address", "VARCHAR(255)"),
         ],
         "dj_mixes": [
             ("audio_url", "VARCHAR(500)"),
         ],
         "users": [
-            ("is_blocked", "BOOLEAN DEFAULT 0"),
+            ("is_blocked", "BOOLEAN DEFAULT false" if _is_pg else "BOOLEAN DEFAULT 0"),
         ],
     }
     for table, columns in migrations.items():
