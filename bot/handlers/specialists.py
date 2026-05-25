@@ -2,6 +2,7 @@
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
+from telegram.helpers import escape_markdown
 from sqlalchemy.orm import Session
 
 from bot.database import SessionLocal
@@ -66,20 +67,28 @@ async def specialists_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             spec_id = int(data.split("_")[1])
             spec = get_specialist_by_id(db, spec_id)
             if spec:
+                name = escape_markdown(spec.stage_name or spec.name or "")
+                category = escape_markdown(spec.category or "")
+                city = escape_markdown(spec.city or "")
+                experience = str(spec.experience_years or "—")
+                specialization = escape_markdown(spec.specialization or "")
                 desc = spec.description_lv if lang == "lv" and spec.description_lv else spec.description
-                instagram = f"📸 Instagram: {spec.instagram}" if spec.instagram else ""
-                website = f"🌐 Сайт: {spec.website}" if spec.website else ""
+                description = escape_markdown(desc or "")
+                price = f"{int(spec.price_from)}" if spec.price_from and spec.price_from == int(spec.price_from) else str(spec.price_from) if spec.price_from else "—"
+                contacts = escape_markdown(spec.contacts or "")
+                instagram = f"📸 Instagram: {escape_markdown(spec.instagram)}" if spec.instagram else ""
+                website = f"🌐 Сайт: {escape_markdown(spec.website)}" if spec.website else ""
                 photo = f"🖼 [Фото / Foto]({spec.photo_url})" if spec.photo_url else ""
                 extras = "\n".join(filter(None, [instagram, website, photo]))
                 text = (
-                    f"🎭 *{spec.stage_name or spec.name}*\n\n"
-                    f"Категория: {spec.category}\n"
-                    f"📍 {spec.city or '—'}\n"
-                    f"⭐ Опыт: {spec.experience_years or '—'} лет\n"
-                    f"🔧 {spec.specialization or '—'}\n\n"
-                    f"{desc or ''}\n\n"
-                    f"💰 Цена от: {spec.price_from or '—'} EUR\n"
-                    f"📞 {spec.contacts or '—'}\n"
+                    f"🎭 *{name}*\n\n"
+                    f"Категория: {category}\n"
+                    f"📍 {city}\n"
+                    f"⭐ Опыт: {experience} лет\n"
+                    f"🔧 {specialization}\n\n"
+                    f"{description}\n\n"
+                    f"💰 Цена от: {price} EUR\n"
+                    f"📞 {contacts}\n"
                     f"{extras}"
                 )
                 await query.edit_message_text(
