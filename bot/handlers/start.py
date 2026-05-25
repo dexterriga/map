@@ -261,8 +261,24 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     text = update.message.text.strip()
     user_tg = update.effective_user
 
+    # If text matches any reply keyboard button, cancel any pending mode and dispatch
+    _reply_buttons = {
+        "📅 Афиша", "⭐ Бонусы", "🎭 Специалисты", "🎧 DJ Миксы",
+        "👤 Профиль", "👥 Пригласи друга", "🎤 Стать DJ", "📸 Сканировать QR",
+        "ℹ️ Помощь", "🌐 LV / RU", "⚙️ Admin", "🍸 Bar Admin",
+        "📅 Afiša", "⭐ Bonusi", "🎭 Speciālisti", "🎧 Miksi",
+        "👤 Profils", "👥 Uzaicini draugu", "🎤 Kļūt par DJ", "📸 Skenēt QR",
+        "ℹ️ Palīdzība", "🌐 RU / LV",
+    }
+    if text in _reply_buttons:
+        context.user_data.pop("scan_mode", None)
+        context.user_data.pop("bar_client_mode", None)
+        context.user_data.pop("bar_admin_mode", None)
+        context.user_data.pop("booking_step", None)
+        # Fall through to dispatch below
+
     # Check if user is in scan_mode (entering QR code manually)
-    if context.user_data.get("scan_mode"):
+    elif context.user_data.get("scan_mode"):
         db = SessionLocal()
         try:
             user_tg = update.effective_user
