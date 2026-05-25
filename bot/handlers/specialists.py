@@ -66,33 +66,43 @@ async def specialists_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         elif data.startswith("spec_"):
             spec_id = int(data.split("_")[1])
             spec = get_specialist_by_id(db, spec_id)
-            if spec:
-                name = escape_markdown(spec.stage_name or spec.name or "")
-                category = escape_markdown(spec.category or "")
-                city = escape_markdown(spec.city or "")
-                experience = str(spec.experience_years or "—")
-                specialization = escape_markdown(spec.specialization or "")
-                desc = spec.description_lv if lang == "lv" and spec.description_lv else spec.description
-                description = escape_markdown(desc or "")
-                price = f"{int(spec.price_from)}" if spec.price_from and spec.price_from == int(spec.price_from) else str(spec.price_from) if spec.price_from else "—"
-                contacts = escape_markdown(spec.contacts or "")
-                instagram = f"📸 Instagram: {escape_markdown(spec.instagram)}" if spec.instagram else ""
-                website = f"🌐 Сайт: {escape_markdown(spec.website)}" if spec.website else ""
-                photo = f"🖼 [Фото / Foto]({spec.photo_url})" if spec.photo_url else ""
-                extras = "\n".join(filter(None, [instagram, website, photo]))
-                text = (
-                    f"🎭 *{name}*\n\n"
-                    f"Категория: {category}\n"
-                    f"📍 {city}\n"
-                    f"⭐ Опыт: {experience} лет\n"
-                    f"🔧 {specialization}\n\n"
-                    f"{description}\n\n"
-                    f"💰 Цена от: {price} EUR\n"
-                    f"📞 {contacts}\n"
-                    f"{extras}"
-                )
+            if not spec:
                 await query.edit_message_text(
-                    text, parse_mode="Markdown",
+                    "😕 Специалист не найден / Speciālists nav atrasts",
+                    reply_markup=back_keyboard("menu_specialists"),
+                )
+                return
+            name = escape_markdown(spec.stage_name or spec.name or "")
+            spec_cat = escape_markdown(spec.category or "")
+            city = escape_markdown(spec.city or "")
+            exp_str = str(spec.experience_years or "—")
+            specialization = escape_markdown(spec.specialization or "")
+            desc_raw = spec.description_lv if lang == "lv" and spec.description_lv else spec.description
+            description = escape_markdown(desc_raw or "")
+            price = f"{int(spec.price_from)}" if spec.price_from and spec.price_from == int(spec.price_from) else str(spec.price_from) if spec.price_from else "—"
+            contacts = escape_markdown(spec.contacts or "")
+            instagram = f"📸 Instagram: {escape_markdown(spec.instagram)}" if spec.instagram else ""
+            website = f"🌐 Сайт: {escape_markdown(spec.website)}" if spec.website else ""
+            extras = "\n".join(filter(None, [instagram, website]))
+            card_text = (
+                f"🎭 *{name}*\n\n"
+                f"Категория: {spec_cat}\n"
+                f"📍 {city}\n"
+                f"⭐ Опыт: {exp_str} лет\n"
+                f"🔧 {specialization}\n\n"
+                f"{description}\n\n"
+                f"💰 Цена от: {price} EUR\n"
+                f"📞 {contacts}\n"
+                f"{extras}"
+            )
+            try:
+                await query.edit_message_text(
+                    card_text, parse_mode="Markdown",
+                    reply_markup=specialist_detail_keyboard(spec_id, spec.photo_url),
+                )
+            except Exception:
+                await query.edit_message_text(
+                    card_text, parse_mode=None,
                     reply_markup=specialist_detail_keyboard(spec_id, spec.photo_url),
                 )
         elif data.startswith("book_"):
