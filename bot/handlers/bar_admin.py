@@ -211,6 +211,23 @@ async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"💰 Klienta bilance: {target_user.bonus_points} pts\n"
                 f"🍸 Admins: {bar_admin_name}"
             )
+            # Notify client about deduction
+            client_lang = target_user.language or "ru"
+            try:
+                await context.application.bot.send_message(
+                    chat_id=target_user.telegram_id,
+                    text=(
+                        f"🍸 Списано {qr_entry.amount} бонусов в баре / Norakstīti {qr_entry.amount} bonusi bārā\n"
+                        f"💰 Баланс: {target_user.bonus_points} pts\n"
+                        f"🍸 Админ: {bar_admin_name}"
+                    ) if client_lang == "ru" else (
+                        f"🍸 Norakstīti {qr_entry.amount} bonusi bārā\n"
+                        f"💰 Bilance: {target_user.bonus_points} pts\n"
+                        f"🍸 Admins: {bar_admin_name}"
+                    ),
+                )
+            except Exception:
+                pass
 
         elif qr_entry.action == "earn":
             # Bar admin created this QR for client — credit the scanner (client)
@@ -232,6 +249,23 @@ async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ Начислено {award_amount} бонусов / Pieskaitīti {award_amount} bonusi\n"
                 f"💰 Баланс: {db_user.bonus_points} pts"
             )
+            # Notify bar admin who created the QR
+            if qr_entry.bar_admin and qr_entry.bar_admin.telegram_id:
+                admin_lang = qr_entry.bar_admin.language or "ru"
+                client_name = db_user.first_name or db_user.username or f"ID{db_user.telegram_id}"
+                try:
+                    await context.application.bot.send_message(
+                        chat_id=qr_entry.bar_admin.telegram_id,
+                        text=(
+                            f"✅ Клиент {client_name} активировал QR на {award_amount} бонусов\n"
+                            f"💰 Начислено: +{award_amount} pts"
+                        ) if admin_lang == "ru" else (
+                            f"✅ Klients {client_name} aktivizēja QR uz {award_amount} bonusiem\n"
+                            f"💰 Pieskaitīts: +{award_amount} pts"
+                        ),
+                    )
+                except Exception:
+                    pass
     finally:
         db.close()
 
