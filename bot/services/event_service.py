@@ -18,7 +18,7 @@ def get_upcoming_events(db: Session, limit: int = 20, offset: int = 0) -> list[E
 
 
 def get_event_by_id(db: Session, event_id: int) -> Event | None:
-    return db.query(Event).filter(Event.id == event_id).first()
+    return db.query(Event).filter(Event.id == event_id, Event.is_active == True).first()
 
 
 def get_featured_events(db: Session, limit: int = 5) -> list[Event]:
@@ -66,3 +66,21 @@ def unsave_event(db: Session, user_id: int, event_id: int) -> bool:
         db.commit()
         return True
     return False
+
+
+def cleanup_past_events(db: Session) -> int:
+    """Deactivate events whose date has passed (yesterday or earlier)."""
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(days=1)
+    expired = (
+        db.query(Event)
+        .filter(Event.is_active == True, Event.date <= cutoff)
+        .all()
+    )
+    count = 0
+    for event in expired:
+        event.is_active = False
+        count += 1
+    if count > 0:
+        db.commit()
+    return count

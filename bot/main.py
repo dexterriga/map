@@ -7,13 +7,14 @@ Telegram bot for Daugavpils nightlife: events, loyalty, booking, DJ mixes.
 import logging
 import sys
 from pathlib import Path
+from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from telegram.ext import ApplicationBuilder, CommandHandler
 from bot.config import BOT_TOKEN, LOG_LEVEL, LOG_FILE
-from bot.database import init_db
+from bot.database import init_db, SessionLocal
 
 
 def setup_logging():
@@ -34,7 +35,7 @@ def register_all_handlers(application):
     """Register all bot handlers."""
     from bot.handlers import (
         start, events, profile, bonuses, referrals,
-        specialists, booking, dj_mixes, dj_register, admin, rss, tickets, bar_admin
+        specialists, booking, dj_mixes, dj_register, admin, rss, tickets, bar_admin, dating
     )
     # dj_register must be before start so ConversationHandler catches reply keyboard buttons
     dj_register.register(application)
@@ -51,12 +52,33 @@ def register_all_handlers(application):
     admin.register(application)
     rss.register(application)
     bar_admin.register(application)
+    dating.register(application)
 
 
 async def post_init(application):
     """Run after bot initialization."""
     logging.info("Party Map Daugavpils Bot started!")
     logging.info(f"Bot username: {application.bot.username}")
+
+    # Schedule cleanup of past events
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from bot.services.event_service import cleanup_past_events
+
+    scheduler = AsyncIOScheduler()
+    
+    async def cleanup_job():
+        db = SessionLocal()
+        try:
+            count = cleanup_past_events(db)
+            if count > 0:
+                logging.info(f"Cleaned up {count} past events")
+        finally:
+            db.close()
+
+    scheduler.add_job(cleanup_job, "interval", hours=1, id="event_cleanup")
+    scheduler.add_job(cleanup_job, "cron", hour=3, minute=0, id="event_cleanup_daily")
+    scheduler.start()
+    logging.info("Scheduler started for event cleanup")
 
 
 async def error_handler(update, context):

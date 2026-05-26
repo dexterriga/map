@@ -1,5 +1,6 @@
 """DJ/Specialist registration and portfolio form (conversation)."""
 
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -12,7 +13,7 @@ from bot.keyboards.inline import back_keyboard
 from bot.config import POINTS
 
 # States
-NAME, CATEGORY, DESCRIPTION, EXPERIENCE, PRICE, CONTACTS, CONFIRM = range(7)
+NAME, CATEGORY, DESCRIPTION, EXPERIENCE, PRICE, CONTACTS, PHOTO, CONFIRM = range(8)
 
 CATEGORIES = ["DJ", "Producer", "MC", "Sound Engineer", "Light Designer"]
 
@@ -147,6 +148,59 @@ async def ask_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["dj_reg"]["contacts"] = update.message.text.strip()
+    user_tg = update.effective_user
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        lang = user.language if user else "ru"
+    finally:
+        db.close()
+    await update.message.reply_text(
+        f"✅ Контакты сохранены.\n\nШаг 7/7: Отправь *фото* (не обязательно) или напиши «—» чтобы пропустить.\n\n"
+        f"Ты можешь прикрепить фото как файл." if lang == "ru"
+        else f"✅ Kontakti saglabāti.\n\n7/7: Nosūti *foto* (nav obligāti) vai uzraksti «—» lai izlaistu.\n\n"
+             f"Vari pievienot foto kā failu.",
+        parse_mode="Markdown",
+    )
+    return PHOTO
+
+
+async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photo upload."""
+    user_tg = update.effective_user
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        lang = user.language if user else "ru"
+    finally:
+        db.close()
+
+    photo_url = ""
+
+    if update.message.photo:
+        photo = update.message.photo[-1]
+        photo_file = await photo.get_file()
+        context.user_data["dj_reg"]["photo_url"] = photo_file.file_id
+        await update.message.reply_text("✅ Фото получено!" if lang == "ru" else "✅ Foto saņemts!")
+    elif update.message.document:
+        doc = update.message.document
+        if doc.mime_type and doc.mime_type.startswith("image/"):
+            photo_file = await doc.get_file()
+            context.user_data["dj_reg"]["photo_url"] = photo_file.file_id
+            await update.message.reply_text("✅ Фото получено!" if lang == "ru" else "✅ Foto saņemts!")
+        else:
+            await update.message.reply_text(
+                "Пожалуйста, отправь изображение или «—» чтобы пропустить." if lang == "ru"
+                else "Lūdzu, nosūti attēlu vai «—» lai izlaistu."
+            )
+            return PHOTO
+    else:
+        text = update.message.text.strip()
+        if text == "—" or text.lower() == "skip":
+            context.user_data["dj_reg"]["photo_url"] = ""
+        else:
+            context.user_data["dj_reg"]["photo_url"] = text
+
     await show_confirmation(update, context)
     return CONFIRM
 
@@ -161,6 +215,7 @@ async def show_confirmation(update, context):
     finally:
         db.close()
 
+    photo_info = "\n🖼 Фото: есть" if data.get("photo_url") else "\n🖼 Фото: нет"
     summary = (
         f"🎧 *{'Подтверждение анкеты' if lang == 'ru' else 'Anketas apstiprinājums'}*\n\n"
         f"👤 Имя: {data.get('name', '—')}\n"
@@ -168,7 +223,7 @@ async def show_confirmation(update, context):
         f"📝 Описание: {data.get('description', '—')[:100]}\n"
         f"⭐ Опыт: {data.get('experience', 0)} лет\n"
         f"💰 Цена от: {data.get('price', 0)} EUR\n"
-        f"📞 Контакты: {data.get('contacts', '—')}\n\n"
+        f"📞 Контакты: {data.get('contacts', '—')}{photo_info}\n\n"
         f"{'Всё верно?' if lang == 'ru' else 'Viss pareizi?'}"
         if lang == "ru"
         else
@@ -178,7 +233,7 @@ async def show_confirmation(update, context):
         f"📝 Apraksts: {data.get('description', '—')[:100]}\n"
         f"⭐ Pieredze: {data.get('experience', 0)} gadi\n"
         f"💰 Cena no: {data.get('price', 0)} EUR\n"
-        f"📞 Kontakti: {data.get('contacts', '—')}\n\n"
+        f"📞 Kontakti: {data.get('contacts', '—')}{photo_info}\n\n"
         f"Viss pareizi?"
     )
     buttons = [
@@ -218,6 +273,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             experience_years=reg_data.get("experience", 0),
             price_from=float(reg_data.get("price", 0)),
             contacts=reg_data.get("contacts", ""),
+            photo_url=reg_data.get("photo_url", ""),
             is_active=True,
             moderation_status="pending",
             created_by=user.telegram_id,
@@ -269,6 +325,11 @@ def get_conversation_handler():
             EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_experience)],
             PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_price)],
             CONTACTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_contacts)],
+            PHOTO: [
+                MessageHandler(filters.PHOTO, ask_photo),
+                MessageHandler(filters.Document.ALL, ask_photo),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_photo),
+            ],
             CONFIRM: [CallbackQueryHandler(confirm, pattern=r"^dj_confirm_")],
         },
         fallbacks=[CommandHandler("cancel", cancel)],

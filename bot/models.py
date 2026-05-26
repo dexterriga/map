@@ -67,6 +67,8 @@ class User(Base):
     birthday = Column(DateTime, nullable=True)
     registered_at = Column(DateTime, default=datetime.utcnow)
     last_activity = Column(DateTime, default=datetime.utcnow)
+    dating_photo = Column(String(500), nullable=True)
+    dating_bio = Column(Text, nullable=True)
 
     transactions = relationship("Transaction", back_populates="user", lazy="dynamic")
     referrals_given = relationship("Referral", foreign_keys="Referral.referrer_id", back_populates="referrer", lazy="dynamic")

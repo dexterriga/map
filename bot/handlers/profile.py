@@ -104,9 +104,10 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"➕ Izveidot pasākumu — izvēlne «Pasākumi»\n"
                     f"👥 /admin — pilna admin panelis"
                 )
+        is_superadmin = user.role == "super_admin"
         await update.message.reply_text(
             text, parse_mode="Markdown",
-            reply_markup=profile_keyboard(lang, is_admin=is_admin, admin_mode=admin_mode),
+            reply_markup=profile_keyboard(lang, is_admin=is_admin, admin_mode=admin_mode, is_superadmin=is_superadmin),
         )
     finally:
         db.close()
@@ -220,9 +221,10 @@ async def _build_profile_text(query, user, db: Session, context):
                 f"➕ Izveidot pasākumu — izvēlne «Pasākumi»\n"
                 f"👥 /admin — pilna admin panelis"
             )
+    is_superadmin = user.role == "super_admin"
     await query.edit_message_text(
         text, parse_mode="Markdown",
-        reply_markup=profile_keyboard(lang, is_admin=is_admin, admin_mode=admin_mode),
+        reply_markup=profile_keyboard(lang, is_admin=is_admin, admin_mode=admin_mode, is_superadmin=is_superadmin),
     )
 
 

@@ -265,10 +265,12 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     _reply_buttons = {
         "📅 Афиша", "⭐ Бонусы", "🎭 Специалисты", "🎧 DJ Миксы",
         "👤 Профиль", "👥 Пригласи друга", "🎤 Стать DJ", "📸 Сканировать QR",
-        "ℹ️ Помощь", "🌐 LV / RU", "⚙️ Admin", "🍸 Bar Admin",
+        "💕 Знакомства",
+        "📩 Администратору", "ℹ️ Помощь", "🌐 LV / RU", "⚙️ Admin", "🍸 Bar Admin",
         "📅 Afiša", "⭐ Bonusi", "🎭 Speciālisti", "🎧 Miksi",
         "👤 Profils", "👥 Uzaicini draugu", "🎤 Kļūt par DJ", "📸 Skenēt QR",
-        "ℹ️ Palīdzība", "🌐 RU / LV",
+        "💕 Iepazīšanās",
+        "📩 Administratoram", "ℹ️ Palīdzība", "🌐 RU / LV",
     }
     if text in _reply_buttons:
         context.user_data.pop("scan_mode", None)
@@ -386,6 +388,39 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         finally:
             db.close()
         return
+
+    # Check if user is in contact_admin_mode (sending message to admin)
+    if context.user_data.get("contact_admin_mode"):
+        db = SessionLocal()
+        try:
+            db_user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+            if not db_user:
+                return
+            lang = db_user.language or "ru"
+            context.user_data.pop("contact_admin_mode", None)
+
+            # Forward message to all admins
+            admin_users = db.query(User).filter(User.role.in_(["admin", "super_admin"])).all()
+            user_info = f"👤 {db_user.first_name or '—'} (@{db_user.username or '—'}, ID: {db_user.id})"
+            sent = 0
+            for admin in admin_users:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin.telegram_id,
+                        text=f"📩 *Сообщение от пользователя*\n\n{user_info}\n\n{text}",
+                        parse_mode="Markdown",
+                    )
+                    sent += 1
+                except Exception:
+                    pass
+
+            await update.message.reply_text(
+                "✅ Твоё сообщение отправлено администратору! Ожидай ответа." if lang == "ru"
+                else "✅ Tava ziņa nosūtīta administratoram! Gaidi atbildi."
+            )
+            return
+        finally:
+            db.close()
 
     # Check if user is in bar_client_mode (entering amount for bar bonus usage)
     client_mode = context.user_data.get("bar_client_mode")
@@ -508,6 +543,7 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         "🎧 DJ Миксы": "menu_mixes",
         "👤 Профиль": "menu_profile",
         "👥 Пригласи друга": "menu_referrals",
+        "💕 Знакомства": "menu_dating",
         "🎤 Стать DJ": "menu_dj_register",
         "ℹ️ Помощь": "menu_help",
         "🍸 Bar Admin": "menu_bar_admin",
@@ -519,6 +555,7 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         "🎧 Miksi": "menu_mixes",
         "👤 Profils": "menu_profile",
         "👥 Uzaicini draugu": "menu_referrals",
+        "💕 Iepazīšanās": "menu_dating",
         "🎤 Kļūt par DJ": "menu_dj_register",
         "ℹ️ Palīdzība": "menu_help",
         "🍸 Bar Admin": "menu_bar_admin",
@@ -559,7 +596,48 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         category = commands_ru[text]
     elif text in commands_lv:
         category = commands_lv[text]
+    elif text.startswith("📩") or text in ("📩 Администратору", "📩 Administratoram"):
+        context.user_data["contact_admin_mode"] = True
+        db = SessionLocal()
+        try:
+            db_user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+            lang = db_user.language if db_user else "ru"
+        finally:
+            db.close()
+        await update.message.reply_text(
+            "✏️ Напиши своё сообщение, и оно будет отправлено администратору.\n\n"
+            "Отправь «—» чтобы отменить." if lang == "ru"
+            else "✏️ Uzraksti savu ziņu, tā tiks nosūtīta administratoram.\n\n"
+                 "Nosūti «—» lai atceltu."
+        )
+        return
     else:
+        # Forward unhandled user messages to admins (contact feature)
+        db = SessionLocal()
+        try:
+            db_user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+            if db_user and db_user.role not in ("admin", "super_admin") and not context.user_data.get("admin_event_step") and not context.user_data.get("admin_edit_event") and not context.user_data.get("admin_edit_mix") and not context.user_data.get("admin_edit_spec") and not context.user_data.get("admin_points_action"):
+                lang = db_user.language or "ru"
+                admin_users = db.query(User).filter(User.role.in_(["admin", "super_admin"])).all()
+                user_info = f"👤 {db_user.first_name or '—'} (@{db_user.username or '—'}, ID: {db_user.id})"
+                sent = 0
+                for admin in admin_users:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=admin.telegram_id,
+                            text=f"💬 *Сообщение от пользователя*\n\n{user_info}\n\n{text}",
+                            parse_mode="Markdown",
+                        )
+                        sent += 1
+                    except Exception:
+                        pass
+                if sent > 0:
+                    await update.message.reply_text(
+                        "✅ Твоё сообщение отправлено администратору!" if lang == "ru"
+                        else "✅ Tava ziņa nosūtīta administratoram!"
+                    )
+        finally:
+            db.close()
         return
 
     if category == "menu_events":
@@ -582,6 +660,26 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         await referral(update, context)
     elif category == "menu_help":
         await help_command(update, context)
+    elif category == "menu_dating":
+        db = SessionLocal()
+        try:
+            db_user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+            lang = db_user.language if db_user else "ru"
+        finally:
+            db.close()
+        if lang == "ru":
+            text = (
+                "💕 *Знакомства*\n\n"
+                "Здесь ты можешь познакомиться с посетителями вечеринок и найти компанию!\n\n"
+                "Функция пока в разработке. Следи за обновлениями!"
+            )
+        else:
+            text = (
+                "💕 *Iepazīšanās*\n\n"
+                "Šeit tu vari iepazīties ar ballīšu apmeklētājiem un atrast kompāniju!\n\n"
+                "Funkcija vēl izstrādē. Seko jaunumiem!"
+            )
+        await update.message.reply_text(text, parse_mode="Markdown")
 
 
 def register(application):

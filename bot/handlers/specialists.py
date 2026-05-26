@@ -2,7 +2,6 @@
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
-from telegram.helpers import escape_markdown
 from sqlalchemy.orm import Session
 
 from bot.database import SessionLocal
@@ -21,11 +20,28 @@ async def specialists(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = db.query(User).filter(User.telegram_id == user_tg.id).first()
         lang = user.language if user else "ru"
 
+        if lang == "ru":
+            text = (
+                "🎭 *Специалисты*\n\n"
+                "Здесь ты можешь найти DJ, фотографов, ведущих и других\n"
+                "специалистов для твоего мероприятия.\n\n"
+                "👇 Выбери категорию:\n\n"
+                "— *Хочешь стать специалистом?*\n"
+                "Нажми «🎤 Стать DJ» в главном меню или используй /djregister,\n"
+                "заполни анкету и после модерации ты появишься в каталоге!"
+            )
+        else:
+            text = (
+                "🎭 *Speciālisti*\n\n"
+                "Šeit tu vari atrast DJ, fotogrāfus, vadītājus un citus\n"
+                "speciālistus savam pasākumam.\n\n"
+                "👇 Izvēlies kategoriju:\n\n"
+                "— *Vēlies kļūt par speciālistu?*\n"
+                "Nospied «🎤 Kļūt par DJ» galvenajā izvēlnē vai izmanto /djregister,\n"
+                "aizpildi anketu un pēc moderācijas tu parādīsies katalogā!"
+            )
         await update.message.reply_text(
-            "🎭 *Категории специалистов*\n\n"
-            "Выбери категорию:" if lang == "ru"
-            else "🎭 *Speciālistu kategorijas*\n\nIzvēlies kategoriju:",
-            parse_mode="Markdown",
+            text, parse_mode="Markdown",
             reply_markup=specialist_categories_keyboard(lang),
         )
     finally:
@@ -72,42 +88,81 @@ async def specialists_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     reply_markup=back_keyboard("menu_specialists"),
                 )
                 return
-            name = escape_markdown(spec.stage_name or spec.name or "")
-            spec_cat = escape_markdown(spec.category or "")
-            city = escape_markdown(spec.city or "")
+
+            def _esc(t):
+                import re
+                if not t:
+                    return "—"
+                # Escape MarkdownV2 special characters
+                return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', str(t))
+
+            name = _esc(spec.stage_name or spec.name)
+            spec_cat = _esc(spec.category)
+            city = _esc(spec.city)
             exp_str = str(spec.experience_years or "—")
-            specialization = escape_markdown(spec.specialization or "")
+            specialization = _esc(spec.specialization)
             desc_raw = spec.description_lv if lang == "lv" and spec.description_lv else spec.description
-            description = escape_markdown(desc_raw or "")
-            price = f"{int(spec.price_from)}" if spec.price_from and spec.price_from == int(spec.price_from) else str(spec.price_from) if spec.price_from else "—"
-            contacts = escape_markdown(spec.contacts or "")
-            instagram = f"📸 Instagram: {escape_markdown(spec.instagram)}" if spec.instagram else ""
-            website = f"🌐 Сайт: {escape_markdown(spec.website)}" if spec.website else ""
+            description = _esc(desc_raw)
+            price_val = int(spec.price_from) if spec.price_from and spec.price_from == int(spec.price_from) else spec.price_from
+            price = str(price_val) if price_val else "—"
+            contacts = _esc(spec.contacts)
+            instagram = f"📸 Instagram: {_esc(spec.instagram)}" if spec.instagram else ""
+            website = f"🌐 Vietne: {_esc(spec.website)}" if spec.website else ""
+            extras = "\n".join(filter(None, [instagram, website]))
+            cat_label = "Категория" if lang == "ru" else "Kategorija"
+            exp_label = "Опыт" if lang == "ru" else "Pieredze"
+            years_label = "лет" if lang == "ru" else "gadi"
+            price_label = "Цена от" if lang == "ru" else "Cena no"
+            site_label = "Сайт" if lang == "ru" else "Vietne"
+            website = f"🌐 {site_label}: {_esc(spec.website)}" if spec.website else ""
             extras = "\n".join(filter(None, [instagram, website]))
             card_text = (
                 f"🎭 *{name}*\n\n"
-                f"Категория: {spec_cat}\n"
+                f"{cat_label}: {spec_cat}\n"
                 f"📍 {city}\n"
-                f"⭐ Опыт: {exp_str} лет\n"
+                f"⭐ {exp_label}: {exp_str} {years_label}\n"
                 f"🔧 {specialization}\n\n"
                 f"{description}\n\n"
-                f"💰 Цена от: {price} EUR\n"
+                f"💰 {price_label}: {price} EUR\n"
                 f"📞 {contacts}\n"
                 f"{extras}"
             )
             try:
-                await query.edit_message_text(
-                    card_text, parse_mode="Markdown",
-                    reply_markup=specialist_detail_keyboard(spec_id, spec.photo_url),
-                )
+                if spec.photo_url:
+                    await query.message.delete()
+                    await query.message.chat.send_photo(
+                        photo=spec.photo_url,
+                        caption=card_text,
+                        parse_mode="MarkdownV2",
+                        reply_markup=specialist_detail_keyboard(spec_id),
+                    )
+                else:
+                    await query.edit_message_text(
+                        card_text, parse_mode="MarkdownV2",
+                        reply_markup=specialist_detail_keyboard(spec_id),
+                    )
             except Exception:
-                await query.edit_message_text(
-                    card_text, parse_mode=None,
-                    reply_markup=specialist_detail_keyboard(spec_id, spec.photo_url),
-                )
+                try:
+                    if spec.photo_url:
+                        await query.message.delete()
+                        await query.message.chat.send_photo(
+                            photo=spec.photo_url, caption=card_text,
+                            parse_mode=None,
+                            reply_markup=specialist_detail_keyboard(spec_id),
+                        )
+                    else:
+                        await query.edit_message_text(
+                            card_text.replace("\\", ""), parse_mode=None,
+                            reply_markup=specialist_detail_keyboard(spec_id),
+                        )
+                except Exception:
+                    await query.edit_message_text(
+                        f"🎭 {name}\n\n{description[:200]}",
+                        parse_mode=None,
+                        reply_markup=specialist_detail_keyboard(spec_id),
+                    )
         elif data.startswith("book_"):
             spec_id = int(data.split("_")[1])
-            from bot.services.booking_service import get_specialist_by_id
             spec = get_specialist_by_id(db, spec_id)
             if spec:
                 context.user_data["booking_specialist_id"] = spec_id

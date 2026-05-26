@@ -1,5 +1,6 @@
 """Admin panel handlers with RBAC."""
 
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from sqlalchemy.orm import Session
@@ -262,12 +263,15 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from bot.keyboards.inline import admin_event_edit_keyboard
                 title = event.title_lv if lang == "lv" and event.title_lv else event.title
                 desc = event.description_lv if lang == "lv" and event.description_lv else event.description
+                img_label = "✅ Есть" if event.image_url else "—"
+                pin_label = "📌 Да" if event.is_featured else "—"
                 text = (
                     f"📅 *{title}*\n\n"
                     f"📆 {event.date.strftime('%d.%m.%Y %H:%M')}\n"
                     f"📍 {event.venue or '—'}\n"
                     f"🏷️ {event.price or 0} EUR\n"
-                    f"🖼 {event.image_url or '—'}\n\n"
+                    f"🖼 {img_label}"
+                    f"\n📌 {'Закреплено' if lang == 'ru' else 'Piesprausts'}: {pin_label}\n\n"
                     f"{desc or ''}"
                 )
                 await query.edit_message_text(
@@ -308,24 +312,115 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from bot.keyboards.inline import admin_event_edit_keyboard
                 title = event.title_lv if lang == "lv" and event.title_lv else event.title
                 desc = event.description_lv if lang == "lv" and event.description_lv else event.description
+                img_label = "✅ Есть" if event.image_url else "—"
+                pin_label = "📌 Да" if event.is_featured else "—"
                 text = (
                     f"📅 *{title}*\n\n"
                     f"📆 {event.date.strftime('%d.%m.%Y %H:%M')}\n"
                     f"📍 {event.venue or '—'}\n"
                     f"🏷️ {event.price or 0} EUR\n"
-                    f"🖼 {event.image_url or '—'}\n\n"
+                    f"🖼 {img_label}"
+                    f"\n📌 {'Закреплено' if lang == 'ru' else 'Piesprausts'}: {pin_label}\n\n"
                     f"{desc or ''}"
                 )
                 await query.edit_message_text(
                     text, parse_mode="Markdown",
                     reply_markup=admin_event_edit_keyboard(event_id, is_featured=event.is_featured),
                 )
+        elif data.startswith("admin_event_delete_"):
+            event_id = int(data.split("_")[3])
+            await query.edit_message_text(
+                f"❓ {'Удалить событие #' + str(event_id) + '?' if lang == 'ru' else 'Dzēst pasākumu #' + str(event_id) + '?'}",
+                reply_markup=confirm_keyboard("delete_event", str(event_id)),
+            )
+        elif data.startswith("confirm_delete_event_"):
+            event_id = int(data.split("_")[3])
+            from bot.models import Event
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if event:
+                event.is_active = False
+                _log_admin_action(db, user, f"Удалил событие: {event.title} (ID: {event.id})",
+                                  target_id=event.created_by)
+                db.commit()
+                await query.answer("🗑 Событие удалено / Pasākums dzēsts!", show_alert=True)
+                await _admin_events(query, db, lang)
+        elif data.startswith("admin_event_share_"):
+            event_id = int(data.split("_")[3])
+            from bot.models import Event
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if not event:
+                await query.answer("Событие не найдено / Pasākums nav atrasts", show_alert=True)
+                return
+            users = db.query(User).filter(User.is_blocked == False).all()
+            title = event.title_lv if lang == "lv" and event.title_lv else event.title
+            desc = event.description_lv if lang == "lv" and event.description_lv else event.description
+            text = (
+                f"📢 *{title}*\n\n"
+                f"📆 {event.date.strftime('%d.%m.%Y %H:%M')}\n"
+                f"📍 {event.venue or 'TBA'}\n"
+                f"🏷️ {event.price or 0} EUR\n\n"
+                f"{desc or ''}"
+            )
+            sent = 0
+            failed = 0
+            for u in users:
+                try:
+                    if u.language == "lv":
+                        text_lv = (
+                            f"📢 *{event.title_lv or event.title}*\n\n"
+                            f"📆 {event.date.strftime('%d.%m.%Y %H:%M')}\n"
+                            f"📍 {event.venue or 'TBA'}\n"
+                            f"🏷️ {event.price or 0} EUR\n\n"
+                            f"{event.description_lv or event.description or ''}"
+                        )
+                        await context.application.bot.send_message(chat_id=u.telegram_id, text=text_lv, parse_mode="Markdown")
+                    else:
+                        await context.application.bot.send_message(chat_id=u.telegram_id, text=text, parse_mode="Markdown")
+                    sent += 1
+                except Exception as e:
+                    failed += 1
+                    logging.warning(f"Failed to share event {event.id} to user {u.telegram_id}: {e}")
+            _log_admin_action(db, user, f"Поделился событием: {event.title} (ID: {event.id}), отправлено {sent}, ошибок {failed}")
+            await query.answer(f"📢 Отправлено: {sent}, ошибок: {failed}" if lang == "ru" else f"📢 Nosūtīts: {sent}, kļūdu: {failed}", show_alert=True)
+        elif data.startswith("admin_broadcast"):
+            if get_role_level(user.role) < 4:
+                await query.answer("🚫 Только Super Admin может публиковать посты!", show_alert=True)
+                return
+            context.user_data["admin_broadcast"] = True
+            await query.edit_message_text(
+                "📢 *Создание поста*\n\n"
+                "Напиши текст поста. Ты можешь упоминать пользователей через @username.\n"
+                "Пост будет отправлен всем пользователям бота.\n"
+                "Отправь «—» чтобы отменить." if lang == "ru"
+                else "📢 *Ziņas izveide*\n\n"
+                     "Uzraksti ziņas tekstu. Vari atzīmēt lietotājus ar @username.\n"
+                     "Ziņa tiks nosūtīta visiem bota lietotājiem.\n"
+                     "Nosūti «—» lai atceltu.",
+                parse_mode="Markdown",
+            )
+        elif data.startswith("admin_points_quick"):
+            if get_role_level(user.role) < 4:
+                await query.answer("🚫 Только Super Admin!", show_alert=True)
+                return
+            await query.edit_message_text(
+                "💰 Введи ID пользователя и количество баллов через пробел.\n"
+                "Пример: `42 100` — начислить 100 баллов пользователю с ID 42\n"
+                "Или: `42 -50` — списать 50 баллов\n\n"
+                "ID пользователя можно посмотреть в разделе 👥 Пользователи." if lang == "ru"
+                else "💰 Ievadi lietotāja ID un punktu skaitu atdalītu ar atstarpi.\n"
+                     "Piemērs: `42 100` — piešķirt 100 punktus lietotājam ar ID 42\n"
+                     "Vai: `42 -50` — norakstīt 50 punktus\n\n"
+                     "Lietotāja ID var atrast sadaļā 👥 Lietotāji.",
+                parse_mode="Markdown",
+            )
+            context.user_data["admin_points_quick"] = True
         elif data.startswith("admin_spec_edit_"):
             from bot.models import Specialist
             spec_id = int(data.split("_")[3])
             spec = db.query(Specialist).filter(Specialist.id == spec_id).first()
             if spec:
                 from bot.keyboards.inline import admin_specialist_edit_keyboard
+                img_label = "✅ Есть / Ir" if spec.photo_url else "—"
                 text = (
                     f"🎭 *{spec.stage_name or spec.name}*\n\n"
                     f"Категория: {spec.category}\n"
@@ -336,7 +431,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"📞 {spec.contacts or '—'}\n"
                     f"📸 Instagram: {spec.instagram or '—'}\n"
                     f"🌐 Сайт: {spec.website or '—'}\n"
-                    f"🖼 Фото: {spec.photo_url or '—'}\n\n"
+                    f"🖼 Фото: {img_label}\n\n"
                     f"{spec.description or ''}"
                 )
                 await query.edit_message_text(
@@ -353,16 +448,23 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "category": "категорию / kategoriju",
                 "description": "описание / aprakstu",
                 "price_from": "цену / cenu",
-                "photo_url": "ссылку на фото / foto saiti",
+                "photo_url": "фото / foto",
                 "instagram": "Instagram",
                 "website": "сайт / vietni",
             }
             label = field_names.get(field, field)
-            await query.edit_message_text(
-                f"✏️ Введи новое значение для *{label}*:" if lang == "ru"
-                else f"✏️ Ievadi jauno vērtību *{label}*:",
-                parse_mode="Markdown",
-            )
+            if field == "photo_url":
+                await query.edit_message_text(
+                    f"📸 Отправь *фото* для специалиста:" if lang == "ru"
+                    else f"📸 Nosūti *foto* speciālistam:",
+                    parse_mode="Markdown",
+                )
+            else:
+                await query.edit_message_text(
+                    f"✏️ Введи новое значение для *{label}*:" if lang == "ru"
+                    else f"✏️ Ievadi jauno vērtību *{label}*:",
+                    parse_mode="Markdown",
+                )
         elif data.startswith("cancel_"):
             await query.edit_message_text("❌ Действие отменено.", reply_markup=admin_keyboard())
         elif data.startswith("confirm_points_"):
@@ -434,6 +536,8 @@ async def _admin_event_start(query, context, lang):
 
 
 async def handle_admin_event_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.photo:
+        return
     user_tg = update.effective_user
     db = SessionLocal()
     try:
@@ -484,8 +588,8 @@ async def handle_admin_event_text(update: Update, context: ContextTypes.DEFAULT_
             data["venue"] = text
             context.user_data["admin_event_step"] = "image_url"
             await update.message.reply_text(
-                f"✅ Место: {text}\n\nШаг 5/8: Введи *ссылку на изображение* (или отправь «—» чтобы пропустить):" if lang == "ru"
-                else f"✅ Vieta: {text}\n\n5/8: Ievadi *attēla saiti* (vai nosūti «—» lai izlaistu):",
+                f"✅ Место: {text}\n\nШаг 5/8: Отправь *фото* или *ссылку на изображение* (или «—» чтобы пропустить):" if lang == "ru"
+                else f"✅ Vieta: {text}\n\n5/8: Nosūti *foto* vai *attēla saiti* (vai «—» lai izlaistu):",
                 parse_mode="Markdown",
             )
         elif step == "image_url":
@@ -530,6 +634,88 @@ async def handle_admin_event_text(update: Update, context: ContextTypes.DEFAULT_
         db.close()
 
 
+async def handle_admin_event_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_tg = update.effective_user
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        if not user or not admin_check(user):
+            return
+        lang = user.language
+        step = context.user_data.get("admin_event_step")
+        if step == "image_url" and update.message.photo:
+            photo = update.message.photo[-1]
+            photo_file = await photo.get_file()
+            data = context.user_data["admin_event_data"]
+            data["image_url"] = photo_file.file_id
+            context.user_data["admin_event_step"] = "price"
+            await update.message.reply_text(
+                "✅ Изображение загружено!\n\nШаг 6/8: Введи *цену* билета в EUR (или 0 если бесплатно):" if lang == "ru"
+                else "✅ Attēls augšupielādēts!\n\n6/8: Ievadi *biļetes cenu* EUR (vai 0 ja bez maksas):",
+                parse_mode="Markdown",
+            )
+    finally:
+        db.close()
+
+
+async def handle_admin_spec_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photo upload for admin specialist editing (photo_url field)."""
+    user_tg = update.effective_user
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        if not user or not admin_check(user):
+            return
+        lang = user.language
+
+        edit_spec = context.user_data.get("admin_edit_spec")
+        if edit_spec and edit_spec.get("field") == "photo_url":
+            from bot.models import Specialist
+            spec_id = edit_spec["id"]
+            spec = db.query(Specialist).filter(Specialist.id == spec_id).first()
+            if spec:
+                photo = update.message.photo[-1]
+                photo_file = await photo.get_file()
+                spec.photo_url = photo_file.file_id
+                db.commit()
+                context.user_data.pop("admin_edit_spec", None)
+                await update.message.reply_text(
+                    "✅ Фото специалиста обновлено!" if lang == "ru"
+                    else "✅ Speciālista foto atjaunināts!",
+                )
+    finally:
+        db.close()
+
+
+async def handle_admin_edit_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photo upload during admin event editing (image_url field)."""
+    user_tg = update.effective_user
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        if not user or not admin_check(user):
+            return
+        lang = user.language
+
+        edit_event = context.user_data.get("admin_edit_event")
+        if edit_event and edit_event.get("field") == "image_url":
+            from bot.models import Event
+            event_id = edit_event["id"]
+            event = db.query(Event).filter(Event.id == event_id).first()
+            if event:
+                photo = update.message.photo[-1]
+                photo_file = await photo.get_file()
+                event.image_url = photo_file.file_id
+                db.commit()
+                context.user_data.pop("admin_edit_event", None)
+                await update.message.reply_text(
+                    "✅ Изображение обновлено!" if lang == "ru"
+                    else "✅ Attēls atjaunināts!",
+                )
+    finally:
+        db.close()
+
+
 async def _admin_event_save(update, context, admin_user, db, data, lang):
     from bot.models import Event, ModerationStatus
 
@@ -555,6 +741,7 @@ async def _admin_event_save(update, context, admin_user, db, data, lang):
     context.user_data.pop("admin_event_data", None)
     context.user_data.pop("admin_event_step", None)
 
+    from bot.keyboards.inline import admin_event_edit_keyboard
     await update.message.reply_text(
         f"✅ *Событие создано!*\n\n"
         f"Название: {event.title}\n"
@@ -571,19 +758,54 @@ async def _admin_event_save(update, context, admin_user, db, data, lang):
              f"🎫 Biļete par bonusiem: {event.ticket_price_points} pts\n"
              f"ID: #{event.id}",
         parse_mode="Markdown",
+        reply_markup=admin_event_edit_keyboard(event.id, is_featured=event.is_featured),
     )
+
+    # Notify all users about the new event
+    users = db.query(User).filter(User.is_blocked == False).all()
+    notified = 0
+    failed = 0
+    for u in users:
+        u_lang = u.language or "ru"
+        title = event.title_lv if u_lang == "lv" and event.title_lv else event.title
+        venue = event.venue or "—"
+        price_text = f"{event.price} EUR" if event.price else "—"
+        date_str = event.date.strftime("%d.%m.%Y %H:%M")
+        notify_text = (
+            f"📅 *{'Новое событие' if u_lang == 'ru' else 'Jauns pasākums'}!* 📅\n\n"
+            f"🎉 *{title}*\n"
+            f"📆 {date_str}\n"
+            f"📍 {venue}\n"
+            f"🏷️ {price_text}"
+        )
+        try:
+            await context.bot.send_message(
+                chat_id=u.telegram_id,
+                text=notify_text,
+                parse_mode="Markdown",
+            )
+            notified += 1
+        except Exception as e:
+            failed += 1
+            logging.warning(f"Failed to notify user {u.telegram_id}: {e}")
+
+    _log_admin_action(db, admin_user, f"Уведомление о новом событии: отправлено {notified}, ошибок {failed}")
 
 
 async def _admin_events(query, db: Session, lang: str):
     from bot.models import Event
-    events = db.query(Event).order_by(Event.date.desc()).limit(10).all()
+    events = db.query(Event).filter(Event.is_active == True).order_by(Event.date.desc()).limit(10).all()
     lines = ["📅 *События / Pasākumi:*\n"]
     kb = []
     if events:
         for e in events:
             title = e.title_lv if lang == "lv" and e.title_lv else e.title
-            lines.append(f"• {title[:50]} — {e.date.strftime('%d.%m.%Y')}")
-            kb.append([InlineKeyboardButton(f"✏️ {title[:45]}", callback_data=f"admin_event_edit_{e.id}")])
+            pin_mark = "📌 " if e.is_featured else ""
+            lines.append(f"{pin_mark}• {title[:50]} — {e.date.strftime('%d.%m.%Y')}")
+            kb.append([
+                InlineKeyboardButton(f"{'📌 ' if e.is_featured else ''}{'✏️ '}{title[:32]}", callback_data=f"admin_event_edit_{e.id}"),
+                InlineKeyboardButton("🗑", callback_data=f"admin_event_delete_{e.id}"),
+            ])
     else:
         lines.append("Нет событий / Nav pasākumu")
     lines.append("")
@@ -776,7 +998,7 @@ async def handle_admin_points_text(update: Update, context: ContextTypes.DEFAULT
             target_name = target_user.first_name or target_user.username or f"#{target_id_str}"
 
             from bot.services.bonus_service import award_points, deduct_points
-            if action == "add_points":
+            if action == "add":
                 award_points(db, target_user, amount,
                              f"Начислено администратором: {amount}",
                              f"Piešķirts administratoram: {amount}",
@@ -799,6 +1021,126 @@ async def handle_admin_points_text(update: Update, context: ContextTypes.DEFAULT
             db.close()
     except (ValueError, TypeError):
         await update.message.reply_text("❌ Введи целое положительное число.")
+
+
+async def handle_admin_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle text input for broadcast post."""
+    if not context.user_data.get("admin_broadcast"):
+        return
+    text = update.message.text.strip()
+    if text == "—":
+        context.user_data.pop("admin_broadcast", None)
+        await update.message.reply_text("❌ Пост отменён / Ziņa atcelta.")
+        return
+
+    db = SessionLocal()
+    try:
+        user_tg = update.effective_user
+        admin = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        if not admin or get_role_level(admin.role) < 4:
+            await update.message.reply_text("🚫 Только Super Admin!")
+            return
+
+        users = db.query(User).filter(User.is_blocked == False).all()
+        sent = 0
+        failed = 0
+        for u in users:
+            try:
+                await context.bot.send_message(
+                    chat_id=u.telegram_id,
+                    text=f"📢 *{'Новый пост' if u.language == 'ru' else 'Jauna ziņa'}* 📢\n\n{text}",
+                    parse_mode="Markdown",
+                )
+                sent += 1
+            except Exception as e:
+                failed += 1
+                logging.warning(f"Failed to send broadcast to {u.telegram_id}: {e}")
+
+        _log_admin_action(db, admin, f"Отправил пост: {text[:50]}... (успешно: {sent}, ошибок: {failed})")
+        await update.message.reply_text(
+            f"✅ Пост отправлен!\n"
+            f"📨 Доставлено: {sent}\n"
+            f"❌ Ошибок: {failed}" if admin.language == "ru"
+            else f"✅ Ziņa nosūtīta!\n"
+                 f"📨 Piegādāts: {sent}\n"
+                 f"❌ Kļūdu: {failed}"
+        )
+    finally:
+        db.close()
+        context.user_data.pop("admin_broadcast", None)
+
+
+async def handle_admin_points_quick_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle quick points input: 'user_id amount'."""
+    if not context.user_data.get("admin_points_quick"):
+        return
+    text = update.message.text.strip()
+    if text == "—":
+        context.user_data.pop("admin_points_quick", None)
+        await update.message.reply_text("❌ Отменено / Atcelts.")
+        return
+
+    parts = text.split()
+    if len(parts) != 2:
+        await update.message.reply_text("❌ Формат: ID_пользователя количество (например: 42 100)")
+        return
+
+    try:
+        target_id = int(parts[0])
+        amount = int(parts[1])
+    except ValueError:
+        await update.message.reply_text("❌ Введи числа. Формат: ID_пользователя количество")
+        return
+
+    db = SessionLocal()
+    try:
+        user_tg = update.effective_user
+        admin = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        if not admin or get_role_level(admin.role) < 4:
+            await update.message.reply_text("🚫 Только Super Admin!")
+            return
+        lang = admin.language
+
+        target_user = db.query(User).filter(User.id == target_id).first()
+        if not target_user:
+            await update.message.reply_text(
+                f"❌ Пользователь с ID {target_id} не найден." if lang == "ru"
+                else f"❌ Lietotājs ar ID {target_id} nav atrasts."
+            )
+            return
+
+        from bot.services.bonus_service import award_points, deduct_points
+
+        if amount > 0:
+            award_points(db, target_user, amount,
+                         f"Начислено суперадминистратором",
+                         f"Piešķirts superadministratoram",
+                         admin_id=admin.telegram_id)
+            _log_admin_action(db, admin, f"Начислил {amount} points пользователю {target_user.first_name} (ID: {target_id})",
+                              target_id=target_user.telegram_id)
+            await update.message.reply_text(
+                f"✅ +{amount} pts пользователю {target_user.first_name} (@{target_user.username or '—'})!" if lang == "ru"
+                else f"✅ +{amount} pts lietotājam {target_user.first_name} (@{target_user.username or '—'})!"
+            )
+        else:
+            try:
+                deduct_points(db, target_user, abs(amount),
+                              f"Списано суперадминистратором",
+                              f"Norakstīts superadministratoram",
+                              admin_id=admin.telegram_id)
+                _log_admin_action(db, admin, f"Списал {abs(amount)} points у пользователя {target_user.first_name} (ID: {target_id})",
+                                  target_id=target_user.telegram_id)
+                await update.message.reply_text(
+                    f"✅ -{abs(amount)} pts у пользователя {target_user.first_name}!" if lang == "ru"
+                    else f"✅ -{abs(amount)} pts lietotājam {target_user.first_name}!"
+                )
+            except ValueError:
+                await update.message.reply_text(
+                    "❌ Недостаточно баллов!" if lang == "ru" else "❌ Nepietiek punktu!"
+                )
+    finally:
+        db.close()
+        context.user_data.pop("admin_points_quick", None)
 
 
 async def approve_mix(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -865,6 +1207,8 @@ async def reject_mix(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_admin_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for admin editing (events and specialists)."""
+    if update.message.photo:
+        return
     user_tg = update.effective_user
     db = SessionLocal()
     try:
@@ -943,6 +1287,8 @@ async def handle_admin_edit_text(update: Update, context: ContextTypes.DEFAULT_T
             from bot.models import Specialist
             spec_id = edit_spec["id"]
             field = edit_spec["field"]
+            if field == "photo_url":
+                return
             spec = db.query(Specialist).filter(Specialist.id == spec_id).first()
             if spec:
                 if field == "price_from":
@@ -964,11 +1310,36 @@ async def handle_admin_edit_text(update: Update, context: ContextTypes.DEFAULT_T
         db.close()
 
 
+async def admin_broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /broadcast command for superadmin."""
+    user_tg = update.effective_user
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        if not user or get_role_level(user.role) < 4:
+            await update.message.reply_text("🚫 Только Super Admin!")
+            return
+        lang = user.language
+        context.user_data["admin_broadcast"] = True
+        await update.message.reply_text(
+            "📢 *Создание поста*\n\n"
+            "Напиши текст поста. Пост будет отправлен всем пользователям бота.\n"
+            "Отправь «—» чтобы отменить." if lang == "ru"
+            else "📢 *Ziņas izveide*\n\n"
+                 "Uzraksti ziņas tekstu. Ziņa tiks nosūtīta visiem bota lietotājiem.\n"
+                 "Nosūti «—» lai atceltu.",
+            parse_mode="Markdown",
+        )
+    finally:
+        db.close()
+
+
 def register(application):
     application.add_handler(CommandHandler("admin", admin_panel))
     application.add_handler(CommandHandler("panel", admin_panel))
     application.add_handler(CommandHandler("approvemix", approve_mix))
     application.add_handler(CommandHandler("rejectmix", reject_mix))
+    application.add_handler(CommandHandler("broadcast", admin_broadcast_command))
     application.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^(admin_|set_role_|confirm_|cancel_)"))
 
     # Handle text messages for admin points input
@@ -980,13 +1351,40 @@ def register(application):
         group=2,
     )
 
+    # Handle photo upload for admin event creation
+    application.add_handler(
+        MessageHandler(
+            filters.PHOTO,
+            handle_admin_event_photo,
+        ),
+        group=1,
+    )
+
+    # Handle photo upload for admin event editing
+    application.add_handler(
+        MessageHandler(
+            filters.PHOTO,
+            handle_admin_edit_photo,
+        ),
+        group=2,
+    )
+
+    # Handle photo upload for admin specialist editing
+    application.add_handler(
+        MessageHandler(
+            filters.PHOTO,
+            handle_admin_spec_photo,
+        ),
+        group=3,
+    )
+
     # Handle text messages for admin event creation
     application.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
             handle_admin_event_text,
         ),
-        group=3,
+        group=4,
     )
 
     # Handle text messages for admin editing (events and specialists)
@@ -995,5 +1393,23 @@ def register(application):
             filters.TEXT & ~filters.COMMAND,
             handle_admin_edit_text,
         ),
-        group=4,
+        group=5,
+    )
+
+    # Handle text messages for admin broadcast
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_admin_broadcast_text,
+        ),
+        group=6,
+    )
+
+    # Handle text messages for admin quick points
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_admin_points_quick_text,
+        ),
+        group=7,
     )

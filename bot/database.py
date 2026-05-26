@@ -70,6 +70,8 @@ def _migrate_db():
         ],
         "users": [
             ("is_blocked", "BOOLEAN DEFAULT false" if _is_pg else "BOOLEAN DEFAULT 0"),
+            ("dating_photo", "VARCHAR(500)"),
+            ("dating_bio", "TEXT"),
         ],
     }
     for table, columns in migrations.items():

@@ -10,7 +10,9 @@ def main_reply_keyboard(lang="ru", is_admin=False, is_bar_admin=False):
             [KeyboardButton("🎭 Специалисты"), KeyboardButton("🎧 DJ Миксы")],
             [KeyboardButton("👤 Профиль"), KeyboardButton("👥 Пригласи друга")],
             [KeyboardButton("🎤 Стать DJ"), KeyboardButton("📸 Сканировать QR")],
-            [KeyboardButton("ℹ️ Помощь"), KeyboardButton("🌐 LV / RU")],
+            [KeyboardButton("💕 Знакомства")],
+            [KeyboardButton("📩 Администратору"), KeyboardButton("ℹ️ Помощь")],
+            [KeyboardButton("🌐 LV / RU")],
         ]
     else:
         buttons = [
@@ -18,7 +20,9 @@ def main_reply_keyboard(lang="ru", is_admin=False, is_bar_admin=False):
             [KeyboardButton("🎭 Speciālisti"), KeyboardButton("🎧 Miksi")],
             [KeyboardButton("👤 Profils"), KeyboardButton("👥 Uzaicini draugu")],
             [KeyboardButton("🎤 Kļūt par DJ"), KeyboardButton("📸 Skenēt QR")],
-            [KeyboardButton("ℹ️ Palīdzība"), KeyboardButton("🌐 RU / LV")],
+            [KeyboardButton("💕 Iepazīšanās")],
+            [KeyboardButton("📩 Administratoram"), KeyboardButton("ℹ️ Palīdzība")],
+            [KeyboardButton("🌐 RU / LV")],
         ]
     if is_admin:
         buttons.append([KeyboardButton("⚙️ Admin")])
@@ -88,7 +92,7 @@ def event_detail_keyboard(event_id, ticket_url=None, ticket_price_points=0, is_a
     return InlineKeyboardMarkup(buttons)
 
 
-def profile_keyboard(lang="ru", is_admin=False, admin_mode=True):
+def profile_keyboard(lang="ru", is_admin=False, admin_mode=True, is_superadmin=False):
     buttons = [
         [InlineKeyboardButton("⭐ Мои награды", callback_data="profile_rewards")],
         [InlineKeyboardButton("💾 Сохранённые события", callback_data="profile_saved")],
@@ -104,6 +108,9 @@ def profile_keyboard(lang="ru", is_admin=False, admin_mode=True):
             buttons.append([InlineKeyboardButton("👥 Все пользователи", callback_data="admin_users")])
             buttons.append([InlineKeyboardButton("🎧 Модерация миксов", callback_data="admin_mixes")])
             buttons.append([InlineKeyboardButton("🍸 Начислить бонусы (бар)", callback_data="profile_bar_earn")])
+            if is_superadmin:
+                buttons.append([InlineKeyboardButton("💰 Начислить баллы пользователю", callback_data="admin_points_quick")])
+                buttons.append([InlineKeyboardButton("📢 Сделать пост / Publicēt", callback_data="admin_broadcast")])
         else:
             buttons.append([InlineKeyboardButton("🟢 Админ: ВЫКЛ — вкл", callback_data="profile_admin_toggle")])
     buttons.append([InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")])
@@ -138,18 +145,15 @@ def specialists_keyboard(specialists, lang="ru"):
     return InlineKeyboardMarkup(buttons)
 
 
-def specialist_detail_keyboard(spec_id, photo_url=None):
-    buttons = []
-    if photo_url:
-        buttons.append([InlineKeyboardButton("🖼 Фото / Foto", url=photo_url)])
-    buttons.extend([
+def specialist_detail_keyboard(spec_id):
+    buttons = [
         [
             InlineKeyboardButton("📅 Забронировать", callback_data=f"book_{spec_id}"),
             InlineKeyboardButton("📨 Заявка / Pieteikums", callback_data=f"request_{spec_id}"),
         ],
         [InlineKeyboardButton("◀️ Назад", callback_data="menu_specialists")],
         [InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")],
-    ])
+    ]
     return InlineKeyboardMarkup(buttons)
 
 
@@ -217,6 +221,7 @@ def admin_keyboard():
         [InlineKeyboardButton("📊 Аналитика", callback_data="admin_analytics")],
         [InlineKeyboardButton("📝 Журнал действий", callback_data="admin_log")],
         [InlineKeyboardButton("🍸 Начислить бонусы (бар)", callback_data="admin_bar_earn")],
+        [InlineKeyboardButton("📢 Сделать пост / Publicēt", callback_data="admin_broadcast")],
         [InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")],
     ]
     return InlineKeyboardMarkup(buttons)
@@ -280,6 +285,7 @@ def back_keyboard(callback_data="menu_main"):
 
 
 def admin_event_edit_keyboard(event_id, is_featured=False):
+    pin_label = "📌 Закреплено / Piesprausts" if is_featured else "📌 Закрепить / Piespraust"
     buttons = [
         [InlineKeyboardButton("✏️ Название / Nosaukums", callback_data=f"admin_event_setfield_{event_id}_title")],
         [InlineKeyboardButton("✏️ Описание / Apraksts", callback_data=f"admin_event_setfield_{event_id}_description")],
@@ -290,7 +296,9 @@ def admin_event_edit_keyboard(event_id, is_featured=False):
         [InlineKeyboardButton("✏️ Цена в pts / Cena pts", callback_data=f"admin_event_setfield_{event_id}_ticket_price_points")],
         [InlineKeyboardButton("✏️ Ссылка на билет / Biļetes saite", callback_data=f"admin_event_setfield_{event_id}_ticket_url")],
         [InlineKeyboardButton("✏️ Изображение / Attēls", callback_data=f"admin_event_setfield_{event_id}_image_url")],
-        [InlineKeyboardButton("📌 Закрепить", callback_data=f"admin_event_toggle_featured_{event_id}")],
+        [InlineKeyboardButton(pin_label, callback_data=f"admin_event_toggle_featured_{event_id}")],
+        [InlineKeyboardButton("🗑 Удалить / Dzēst", callback_data=f"admin_event_delete_{event_id}")],
+        [InlineKeyboardButton("📢 Поделиться / Dalīties", callback_data=f"admin_event_share_{event_id}")],
         [InlineKeyboardButton("◀️ Назад", callback_data="admin_events")],
         [InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")],
     ]
@@ -303,7 +311,7 @@ def admin_specialist_edit_keyboard(spec_id):
         [InlineKeyboardButton("✏️ Категория / Kategorija", callback_data=f"admin_spec_setfield_{spec_id}_category")],
         [InlineKeyboardButton("✏️ Описание / Apraksts", callback_data=f"admin_spec_setfield_{spec_id}_description")],
         [InlineKeyboardButton("✏️ Цена / Cena", callback_data=f"admin_spec_setfield_{spec_id}_price_from")],
-        [InlineKeyboardButton("✏️ Фото / Foto", callback_data=f"admin_spec_setfield_{spec_id}_photo_url")],
+        [InlineKeyboardButton("📸 Загрузить фото / Augšupielādēt foto", callback_data=f"admin_spec_setfield_{spec_id}_photo_url")],
         [InlineKeyboardButton("✏️ Instagram", callback_data=f"admin_spec_setfield_{spec_id}_instagram")],
         [InlineKeyboardButton("✏️ Сайт / Vietne", callback_data=f"admin_spec_setfield_{spec_id}_website")],
         [InlineKeyboardButton("◀️ Назад", callback_data="admin_specialists")],

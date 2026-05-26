@@ -18,6 +18,9 @@ from bot.utils.helpers import format_datetime, format_price
 from bot.config import POINTS
 
 
+def _is_url(s: str) -> bool:
+    return s.startswith("http://") or s.startswith("https://")
+
 def _format_events_list(events, lang):
     """Build a formatted text list of events with date/time/venue/image."""
     lines = []
@@ -28,7 +31,10 @@ def _format_events_list(events, lang):
         price = f"{ev.price} EUR" if ev.price else "—"
         line = f"📅 {dt} — *{title}*\n📍 {venue} | 🏷️ {price}"
         if ev.image_url:
-            line += f"\n🖼 [{'Афиша' if lang == 'ru' else 'Afiša'}]({ev.image_url})"
+            if _is_url(ev.image_url):
+                line += f"\n🖼 [{'Афиша' if lang == 'ru' else 'Afiša'}]({ev.image_url})"
+            else:
+                line += "\n🖼 Есть афиша"
         lines.append(line)
     return "\n\n".join(lines)
 
@@ -184,7 +190,10 @@ async def events_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ticket_info = f"🎫 *Билет:* {event.price} EUR"
                 image_info = ""
                 if event.image_url:
-                    image_info = f"\n🖼 [Смотреть афишу]({event.image_url})"
+                    if _is_url(event.image_url):
+                        image_info = f"\n🖼 [Смотреть афишу]({event.image_url})"
+                    else:
+                        image_info = "\n🖼 Есть афиша"
                 detail_text = (
                     f"📅 *{title}*{image_info}\n\n"
                     f"📆 {format_datetime(event.date)}\n"
@@ -217,7 +226,10 @@ async def events_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ticket_info = f"🎫 *Билет:* {event.price} EUR"
                 image_info = ""
                 if event.image_url:
-                    image_info = f"\n🖼 [Смотреть афишу]({event.image_url})"
+                    if _is_url(event.image_url):
+                        image_info = f"\n🖼 [Смотреть афишу]({event.image_url})"
+                    else:
+                        image_info = "\n🖼 Есть афиша"
                 text = (
                     f"📅 *{title}*{image_info}\n\n"
                     f"📆 {format_datetime(event.date)}\n"
