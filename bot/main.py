@@ -108,7 +108,7 @@ def main():
     register_all_handlers(application)
 
     logging.info("Starting polling...")
-    application.run_polling(allowed_updates=["message", "callback_query"])
+    application.run_polling(allowed_updates=["message", "callback_query"], drop_pending_updates=True)
 
 
 if __name__ == "__main__":

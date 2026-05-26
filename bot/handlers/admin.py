@@ -300,6 +300,38 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else f"✏️ Ievadi jauno vērtību *{label}*:",
                 parse_mode="Markdown",
             )
+        elif data.startswith("admin_spec_delete_"):
+            spec_id = int(data.split("_")[3])
+            await query.edit_message_text(
+                f"❓ {'Удалить специалиста #' + str(spec_id) + '?' if lang == 'ru' else 'Dzēst speciālistu #' + str(spec_id) + '?'}",
+                reply_markup=confirm_keyboard("delete_spec", str(spec_id)),
+            )
+        elif data.startswith("confirm_delete_spec_"):
+            spec_id = int(data.split("_")[3])
+            from bot.models import Specialist
+            spec = db.query(Specialist).filter(Specialist.id == spec_id).first()
+            if spec:
+                db.delete(spec)
+                _log_admin_action(db, user, f"Удалил специалиста: {spec.name} (ID: {spec.id})")
+                db.commit()
+                await query.answer("🗑 Специалист удалён / Speciālists dzēsts!", show_alert=True)
+                await _admin_specialists(query, db, lang)
+        elif data.startswith("admin_mix_delete_"):
+            mix_id = int(data.split("_")[3])
+            await query.edit_message_text(
+                f"❓ {'Удалить микс #' + str(mix_id) + '?' if lang == 'ru' else 'Dzēst miksu #' + str(mix_id) + '?'}",
+                reply_markup=confirm_keyboard("delete_mix", str(mix_id)),
+            )
+        elif data.startswith("confirm_delete_mix_"):
+            mix_id = int(data.split("_")[3])
+            from bot.models import DjMix
+            mix = db.query(DjMix).filter(DjMix.id == mix_id).first()
+            if mix:
+                db.delete(mix)
+                _log_admin_action(db, user, f"Удалил микс: {mix.title} (ID: {mix.id})")
+                db.commit()
+                await query.answer("🗑 Микс удалён / Mikss dzēsts!", show_alert=True)
+                await _admin_mixes(query, db, lang)
         elif data.startswith("admin_event_toggle_featured_"):
             from bot.models import Event
             event_id = int(data.split("_")[4])
@@ -831,7 +863,10 @@ async def _admin_specialists(query, db: Session, lang: str):
     kb = []
     for s in specs:
         lines.append(f"• {s.name} — {s.category}")
-        kb.append([InlineKeyboardButton(f"✏️ {s.name}", callback_data=f"admin_spec_edit_{s.id}")])
+        kb.append([
+            InlineKeyboardButton(f"✏️ {s.name[:30]}", callback_data=f"admin_spec_edit_{s.id}"),
+            InlineKeyboardButton("🗑", callback_data=f"admin_spec_delete_{s.id}"),
+        ])
     kb.append([InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")])
     await query.edit_message_text(
         "\n".join(lines), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb)
@@ -854,7 +889,10 @@ async def _admin_mixes(query, db: Session, lang: str):
     for m in all_mixes:
         status_icon = {"pending": "⏳", "approved": "✅", "rejected": "❌"}.get(m.moderation_status, "❓")
         label = f"{status_icon} {m.title[:25]} — {m.artist_name[:15]}"
-        buttons.append([InlineKeyboardButton(label, callback_data=f"admin_mix_edit_{m.id}")])
+        buttons.append([
+            InlineKeyboardButton(label, callback_data=f"admin_mix_edit_{m.id}"),
+            InlineKeyboardButton("🗑", callback_data=f"admin_mix_delete_{m.id}"),
+        ])
 
     buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")])
     buttons.append([InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")])
