@@ -623,6 +623,9 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         return
     else:
         # Forward unhandled user messages to admins (contact feature)
+        # Skip if user is in a wizard (e.g. dating profile creation)
+        if context.user_data.get("dating_wizard_step"):
+            return
         db = SessionLocal()
         try:
             db_user = db.query(User).filter(User.telegram_id == user_tg.id).first()
