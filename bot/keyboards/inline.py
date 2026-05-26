@@ -199,7 +199,7 @@ def specialist_categories_keyboard(lang="ru"):
     categories = [
         "DJ", "Ведущий / Vadītājs", "Фотограф / Fotogrāfs",
         "Видеограф / Videogrāfs", "Декоратор / Dekorators",
-        "Организатор / Organizators", "Звук / Skaņa", "Свет / Gaisma"
+        "Организатор / Organizators", "Технический / Tehniskais"
     ]
     buttons = []
     for cat in categories:

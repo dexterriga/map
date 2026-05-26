@@ -15,7 +15,9 @@ from bot.config import POINTS
 # States
 NAME, CATEGORY, DESCRIPTION, EXPERIENCE, PRICE, CONTACTS, PHOTO, CONFIRM = range(8)
 
-CATEGORIES = ["DJ", "Producer", "MC", "Sound Engineer", "Light Designer"]
+CATEGORIES = ["DJ", "Ведущий / Vadītājs", "Фотограф / Fotogrāfs",
+              "Видеограф / Videogrāfs", "Декоратор / Dekorators",
+              "Организатор / Organizators", "Технический / Tehniskais"]
 
 async def dj_register_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_tg = update.effective_user
