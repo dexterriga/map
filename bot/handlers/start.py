@@ -577,11 +577,6 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         await bar_admin_panel(update, context)
         return
 
-    if category == "menu_feed":
-        from bot.handlers.feed import feed
-        await feed(update, context)
-        return
-
     if text in ("📸 Сканировать QR", "📸 Skenēt QR"):
         db = SessionLocal()
         try:
@@ -670,6 +665,9 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     elif category == "menu_dating":
         from bot.handlers.dating import dating_menu
         await dating_menu(update, context)
+    elif category == "menu_feed":
+        from bot.handlers.feed import feed
+        await feed(update, context)
 
 
 def register(application):
