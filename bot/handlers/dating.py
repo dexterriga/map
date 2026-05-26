@@ -1021,7 +1021,8 @@ def _query_r(lang: str, ru_text: str, lv_text: str) -> str:
 def register(application):
     application.add_handler(CallbackQueryHandler(dating_callback, pattern=r"^dating_"))
     application.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_dating_photo))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_dating_text))
+    # handle_dating_text in group 1 so it runs after reply_keyboard_handler in group 0
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_dating_text), group=1)
     application.add_handler(CommandHandler("done", handle_dating_done))
     application.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
     application.add_handler(MessageHandler(
