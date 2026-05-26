@@ -48,7 +48,7 @@ _wizard_steps = {
 }
 
 
-def _(update: Update, user: User, ru_text: str, lv_text: str) -> str:
+def _(user: User, ru_text: str, lv_text: str) -> str:
     return ru_text if user.language == "ru" else lv_text
 
 
@@ -136,7 +136,7 @@ async def _show_dating_main_menu(update, context, user, profile, db):
     reply_markup = InlineKeyboardMarkup(buttons)
     if hasattr(update, "edit_message_text"):
         await update.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
-    elif hasattr(update, "callback_query"):
+    elif hasattr(update, "callback_query") and update.callback_query is not None:
         await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
     else:
         await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
@@ -362,10 +362,12 @@ async def _ask_rules_accept(query_or_update, context, user, lang, edit_mode=Fals
         [InlineKeyboardButton("❌ Нет / Nē", callback_data="dating_decline_rules")],
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
-    if hasattr(query_or_update, "message") and query_or_update.message:
-        await query_or_update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
-    else:
+    if hasattr(query_or_update, "edit_message_text"):
         await query_or_update.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+    elif hasattr(query_or_update, "callback_query") and query_or_update.callback_query is not None:
+        await query_or_update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+    else:
+        await query_or_update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
 
 
 async def _finish_wizard(query, context, user, db):
@@ -466,10 +468,12 @@ async def _show_edit_menu(query_or_update, user, profile, lang):
         [InlineKeyboardButton("◀️ Назад / Atpakaļ", callback_data="dating_main")],
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
-    if hasattr(query_or_update, "message") and query_or_update.message:
-        await query_or_update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
-    else:
+    if hasattr(query_or_update, "edit_message_text"):
         await query_or_update.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+    elif hasattr(query_or_update, "callback_query") and query_or_update.callback_query is not None:
+        await query_or_update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+    else:
+        await query_or_update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
 
 
 async def _show_my_profile(query, user, profile, lang, db):
