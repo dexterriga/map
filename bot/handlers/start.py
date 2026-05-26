@@ -195,6 +195,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown",
                 reply_markup=main_menu_keyboard(lang),
             )
+        elif data == "menu_dating":
+            from bot.handlers.dating import dating_menu
+            await dating_menu(update, context)
         elif data == "lang_ru":
             if db_user:
                 db_user.language = "ru"
@@ -263,6 +266,7 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # If text matches any reply keyboard button, cancel any pending mode and dispatch
     _reply_buttons = {
+        "📋 Меню", "📋 Menu",
         "📅 Афиша", "⭐ Бонусы", "🎭 Специалисты", "🎧 DJ Миксы",
         "👤 Профиль", "👥 Пригласи друга", "🎤 Я – специалист", "📸 Сканировать QR",
         "💕 Знакомства", "📰 Лента",
@@ -563,6 +567,10 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         "🍸 Bar Admin": "menu_bar_admin",
     }
 
+    if text in ("📋 Меню", "📋 Menu"):
+        await menu(update, context)
+        return
+
     if text == "🌐 LV / RU" or text == "🌐 RU / LV":
         await language(update, context)
         return
@@ -677,4 +685,4 @@ def register(application):
     application.add_handler(CommandHandler("about", about))
     application.add_handler(CommandHandler("language", language))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, reply_keyboard_handler))
-    application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(menu_main|menu_help|lang_)"))
+    application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(menu_main|menu_help|menu_dating|lang_)"))

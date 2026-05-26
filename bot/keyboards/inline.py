@@ -6,6 +6,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 def main_reply_keyboard(lang="ru", is_admin=False, is_bar_admin=False):
     if lang == "ru":
         buttons = [
+            [KeyboardButton("📋 Меню")],
             [KeyboardButton("📅 Афиша"), KeyboardButton("⭐ Бонусы")],
             [KeyboardButton("🎭 Специалисты"), KeyboardButton("🎧 DJ Миксы")],
             [KeyboardButton("👤 Профиль"), KeyboardButton("👥 Пригласи друга")],
@@ -16,6 +17,7 @@ def main_reply_keyboard(lang="ru", is_admin=False, is_bar_admin=False):
         ]
     else:
         buttons = [
+            [KeyboardButton("📋 Menu")],
             [KeyboardButton("📅 Afiša"), KeyboardButton("⭐ Bonusi")],
             [KeyboardButton("🎭 Speciālisti"), KeyboardButton("🎧 Miksi")],
             [KeyboardButton("👤 Profils"), KeyboardButton("👥 Uzaicini draugu")],
@@ -33,6 +35,7 @@ def main_reply_keyboard(lang="ru", is_admin=False, is_bar_admin=False):
 
 def main_menu_keyboard(lang="ru"):
     buttons = [
+        [InlineKeyboardButton("💕 Знакомства / Iepazīšanās", callback_data="menu_dating")],
         [InlineKeyboardButton("📅 Афиша / Afiša", callback_data="menu_events")],
         [InlineKeyboardButton("⭐ Бонусы / Bonusi", callback_data="menu_bonuses")],
         [InlineKeyboardButton("🎭 Специалисты / Speciālisti", callback_data="menu_specialists")],
