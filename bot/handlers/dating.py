@@ -134,10 +134,12 @@ async def _show_dating_main_menu(update, context, user, profile, db):
         ]
 
     reply_markup = InlineKeyboardMarkup(buttons)
-    if hasattr(update, "message") and update.message:
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
-    else:
+    if hasattr(update, "edit_message_text"):
         await update.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+    elif hasattr(update, "callback_query"):
+        await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
 
 
 # ========== Callback handler ==========
