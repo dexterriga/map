@@ -36,7 +36,9 @@ def init_db():
         DjMix, MixListen, Transaction, Reward, RewardRedemption,
         Referral, RssSource, RssEntry, AuditLog, SavedEvent,
         Notification, AdminAction, PointsLog, EventBonus, SoldTicket,
-        PointsQR
+        PointsQR, FeedPost, DatingLike, DatingMessage,
+        DatingProfile, DatingPhoto, DatingPayment, DatingAccessPackage,
+        DatingProfileView, DatingComplaint, DatingModerationLog
     )
     Base.metadata.create_all(bind=engine)
     _migrate_db()
@@ -72,6 +74,12 @@ def _migrate_db():
             ("is_blocked", "BOOLEAN DEFAULT false" if _is_pg else "BOOLEAN DEFAULT 0"),
             ("dating_photo", "VARCHAR(500)"),
             ("dating_bio", "TEXT"),
+            ("dating_gender", "VARCHAR(10)"),
+            ("dating_age", "INTEGER"),
+            ("dating_interests", "VARCHAR(500)"),
+            ("dating_is_active", "BOOLEAN DEFAULT false" if _is_pg else "BOOLEAN DEFAULT 0"),
+            ("dating_phone", "VARCHAR(50)"),
+            ("dating_city", "VARCHAR(100)"),
         ],
     }
     for table, columns in migrations.items():

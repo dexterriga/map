@@ -35,7 +35,7 @@ def register_all_handlers(application):
     """Register all bot handlers."""
     from bot.handlers import (
         start, events, profile, bonuses, referrals,
-        specialists, booking, dj_mixes, dj_register, admin, rss, tickets, bar_admin, dating
+        specialists, booking, dj_mixes, dj_register, admin, rss, tickets, bar_admin, dating, feed
     )
     # dj_register must be before start so ConversationHandler catches reply keyboard buttons
     dj_register.register(application)
@@ -53,6 +53,7 @@ def register_all_handlers(application):
     rss.register(application)
     bar_admin.register(application)
     dating.register(application)
+    feed.register(application)
 
 
 async def post_init(application):
@@ -101,6 +102,9 @@ def main():
         ApplicationBuilder()
         .token(BOT_TOKEN)
         .post_init(post_init)
+        .get_updates_connection_pool_size(1)
+        .get_updates_pool_timeout(30)
+        .get_updates_read_timeout(30)
         .build()
     )
 
@@ -108,7 +112,7 @@ def main():
     register_all_handlers(application)
 
     logging.info("Starting polling...")
-    application.run_polling(allowed_updates=["message", "callback_query"], drop_pending_updates=True)
+    application.run_polling(allowed_updates=["message", "callback_query"])
 
 
 if __name__ == "__main__":

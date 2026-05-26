@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from bot.database import SessionLocal
-from bot.models import User, DjMix, MixListen
+from bot.models import User, DjMix, MixListen, Specialist
 from bot.keyboards.inline import (
     dj_mixes_keyboard, mix_detail_keyboard, back_keyboard
 )
@@ -68,7 +68,9 @@ async def mixes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        is_dj = user and has_permission(user.role, "dj_performer")
+        is_dj = user and db.query(Specialist).filter(
+            Specialist.user_id == user.id, Specialist.category == "DJ", Specialist.is_active == True
+        ).first() is not None
 
         # Send sort/controls message
         await update.message.reply_text(
@@ -96,7 +98,7 @@ async def mixes(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"• {m.title} — {m.artist_name}: {m.external_link or '—'}")
             await update.message.reply_text("\n".join(lines))
 
-        # Upload hint for DJs
+        # Upload hint for DJs only
         if is_dj:
             await update.message.reply_text(
                 "📤 /uploadmix — Загрузить свой микс / Augšupielādēt savu miksu"
@@ -104,7 +106,6 @@ async def mixes(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else "📤 /uploadmix — Augšupielādēt savu miksu",
                 reply_markup=back_keyboard("menu_main"),
             )
-
     finally:
         db.close()
 
@@ -272,7 +273,9 @@ async def upload_mix(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         lang = user.language
         is_admin = user.role in ("admin", "super_admin", "moderator")
-        is_dj = has_permission(user.role, "dj_performer")
+        is_dj = db.query(Specialist).filter(
+            Specialist.user_id == user.id, Specialist.category == "DJ", Specialist.is_active == True
+        ).first() is not None
 
         if not is_dj and not is_admin:
             await update.message.reply_text(

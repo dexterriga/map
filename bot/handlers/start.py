@@ -264,12 +264,12 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     # If text matches any reply keyboard button, cancel any pending mode and dispatch
     _reply_buttons = {
         "📅 Афиша", "⭐ Бонусы", "🎭 Специалисты", "🎧 DJ Миксы",
-        "👤 Профиль", "👥 Пригласи друга", "🎤 Стать DJ", "📸 Сканировать QR",
-        "💕 Знакомства",
+        "👤 Профиль", "👥 Пригласи друга", "🎤 Я – специалист", "📸 Сканировать QR",
+        "💕 Знакомства", "📰 Лента",
         "📩 Администратору", "ℹ️ Помощь", "🌐 LV / RU", "⚙️ Admin", "🍸 Bar Admin",
         "📅 Afiša", "⭐ Bonusi", "🎭 Speciālisti", "🎧 Miksi",
-        "👤 Profils", "👥 Uzaicini draugu", "🎤 Kļūt par DJ", "📸 Skenēt QR",
-        "💕 Iepazīšanās",
+        "👤 Profils", "👥 Uzaicini draugu", "🎤 Es esmu speciālists", "📸 Skenēt QR",
+        "💕 Iepazīšanās", "📰 Jaunumi",
         "📩 Administratoram", "ℹ️ Palīdzība", "🌐 RU / LV",
     }
     if text in _reply_buttons:
@@ -544,7 +544,8 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         "👤 Профиль": "menu_profile",
         "👥 Пригласи друга": "menu_referrals",
         "💕 Знакомства": "menu_dating",
-        "🎤 Стать DJ": "menu_dj_register",
+        "🎤 Я – специалист": "menu_dj_register",
+        "📰 Лента": "menu_feed",
         "ℹ️ Помощь": "menu_help",
         "🍸 Bar Admin": "menu_bar_admin",
     }
@@ -556,7 +557,8 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         "👤 Profils": "menu_profile",
         "👥 Uzaicini draugu": "menu_referrals",
         "💕 Iepazīšanās": "menu_dating",
-        "🎤 Kļūt par DJ": "menu_dj_register",
+        "🎤 Es esmu speciālists": "menu_dj_register",
+        "📰 Jaunumi": "menu_feed",
         "ℹ️ Palīdzība": "menu_help",
         "🍸 Bar Admin": "menu_bar_admin",
     }
@@ -573,6 +575,11 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     if text == "🍸 Bar Admin":
         from bot.handlers.bar_admin import bar_admin_panel
         await bar_admin_panel(update, context)
+        return
+
+    if category == "menu_feed":
+        from bot.handlers.feed import feed
+        await feed(update, context)
         return
 
     if text in ("📸 Сканировать QR", "📸 Skenēt QR"):
@@ -661,25 +668,8 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     elif category == "menu_help":
         await help_command(update, context)
     elif category == "menu_dating":
-        db = SessionLocal()
-        try:
-            db_user = db.query(User).filter(User.telegram_id == user_tg.id).first()
-            lang = db_user.language if db_user else "ru"
-        finally:
-            db.close()
-        if lang == "ru":
-            text = (
-                "💕 *Знакомства*\n\n"
-                "Здесь ты можешь познакомиться с посетителями вечеринок и найти компанию!\n\n"
-                "Функция пока в разработке. Следи за обновлениями!"
-            )
-        else:
-            text = (
-                "💕 *Iepazīšanās*\n\n"
-                "Šeit tu vari iepazīties ar ballīšu apmeklētājiem un atrast kompāniju!\n\n"
-                "Funkcija vēl izstrādē. Seko jaunumiem!"
-            )
-        await update.message.reply_text(text, parse_mode="Markdown")
+        from bot.handlers.dating import dating_menu
+        await dating_menu(update, context)
 
 
 def register(application):

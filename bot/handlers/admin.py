@@ -140,6 +140,14 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 mix.moderation_status = "approved"
                 mix.is_published = True
                 db.commit()
+                from bot.handlers.feed import add_feed_post
+                add_feed_post(
+                    db, "mix",
+                    title=f"🎧 {mix.title}",
+                    text_content=f"DJ: {mix.artist_name or '—'}\n{mix.description or ''}",
+                    created_by=user.telegram_id,
+                    reference_id=mix.id,
+                )
                 await query.answer("✅ Микс опубликован!" if lang == "ru" else "✅ Mikss publicēts!", show_alert=True)
                 await _admin_mixes(query, db, lang)
         elif data.startswith("admin_mix_reject_"):
@@ -427,6 +435,56 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else "📢 *Ziņas izveide*\n\n"
                      "Uzraksti ziņas tekstu. Vari atzīmēt lietotājus ar @username.\n"
                      "Ziņa tiks nosūtīta visiem bota lietotājiem.\n"
+                     "Nosūti «—» lai atceltu.",
+                parse_mode="Markdown",
+            )
+        elif data.startswith("admin_dating"):
+            from bot.services.dating_service import get_all_profiles, moderate_profile
+            from bot.models import DatingProfileStatus
+            parts = data.split("_")
+            if len(parts) >= 4 and parts[2] == "profile":
+                profile_id = int(parts[3])
+                dating_profile = db.query(DatingProfile).filter(DatingProfile.id == profile_id).first()
+                if not dating_profile:
+                    await query.answer("Анкета не найдена", show_alert=True)
+                    return
+                await _show_dating_profile(query, context, user, dating_profile, lang, db)
+            elif len(parts) >= 5 and parts[2] == "moderate":
+                profile_id = int(parts[3])
+                action = parts[4]
+                dating_profile = db.query(DatingProfile).filter(DatingProfile.id == profile_id).first()
+                if dating_profile:
+                    new_status = {
+                        "approve": DatingProfileStatus.ACTIVE.value,
+                        "reject": DatingProfileStatus.REJECTED.value,
+                        "block": DatingProfileStatus.BLOCKED.value,
+                    }.get(action, "")
+                    if new_status:
+                        moderate_profile(db, dating_profile, user.telegram_id, new_status,
+                                         f"{'Одобрена' if action == 'approve' else 'Отклонена' if action == 'reject' else 'Заблокирована'} администратором")
+                        await query.answer("✅ Готово / Gatavs!", show_alert=True)
+                        await _admin_dating_list(query, context, user, lang, db)
+            elif len(parts) >= 4 and parts[2] == "settings":
+                if len(parts) >= 5:
+                    setting_value = parts[3]
+                    from bot.services.dating_service import update_dating_config, get_dating_config
+                    config = get_dating_config()
+                    if setting_value == "safe_mode":
+                        update_dating_config(safe_mode=not config.get("safe_mode", True))
+                        await query.answer("✅ Настройка обновлена!", show_alert=True)
+                await _admin_dating_settings(query, user, lang)
+            else:
+                await _admin_dating_list(query, context, user, lang, db)
+        elif data.startswith("admin_feed_post"):
+            context.user_data["admin_feed_post"] = True
+            await query.edit_message_text(
+                "📝 *Написать в ленту*\n\n"
+                "Напиши текст поста. Он появится в ленте новостей для всех пользователей.\n"
+                "Первая строка будет заголовком, остальное — текстом поста.\n"
+                "Отправь «—» чтобы отменить." if lang == "ru"
+                else "📝 *Rakstīt lentē*\n\n"
+                     "Uzraksti ziņas tekstu. Tas parādīsies jaunumu lentē visiem lietotājiem.\n"
+                     "Pirmā rinda būs virsraksts, pārējais — ziņas teksts.\n"
                      "Nosūti «—» lai atceltu.",
                 parse_mode="Markdown",
             )
@@ -823,10 +881,22 @@ async def _admin_event_save(update, context, admin_user, db, data, lang):
 
     _log_admin_action(db, admin_user, f"Уведомление о новом событии: отправлено {notified}, ошибок {failed}")
 
+    # Add to feed
+    from bot.handlers.feed import add_feed_post
+    date_str = event.date.strftime("%d.%m.%Y %H:%M")
+    add_feed_post(
+        db, "event",
+        title=f"📅 {event.title}",
+        text_content=f"📆 {date_str}\n📍 {event.venue or '—'}\n🏷️ {event.price or 0} EUR",
+        image_url=event.image_url,
+        created_by=admin_user.telegram_id,
+        reference_id=event.id,
+    )
+
 
 async def _admin_events(query, db: Session, lang: str):
     from bot.models import Event
-    events = db.query(Event).filter(Event.is_active == True).order_by(Event.date.desc()).limit(10).all()
+    events = db.query(Event).order_by(Event.date.desc()).limit(10).all()
     lines = ["📅 *События / Pasākumi:*\n"]
     kb = []
     if events:
@@ -1106,6 +1176,47 @@ async def handle_admin_broadcast_text(update: Update, context: ContextTypes.DEFA
     finally:
         db.close()
         context.user_data.pop("admin_broadcast", None)
+
+
+async def handle_admin_feed_post_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle text input for admin feed post."""
+    if not context.user_data.get("admin_feed_post"):
+        return
+    text = update.message.text.strip()
+    if text == "—":
+        context.user_data.pop("admin_feed_post", None)
+        await update.message.reply_text("❌ Отменено / Atcelts.")
+        return
+
+    lines = text.split("\n", 1)
+    title = lines[0]
+    body = lines[1] if len(lines) > 1 else ""
+
+    db = SessionLocal()
+    try:
+        user_tg = update.effective_user
+        admin = db.query(User).filter(User.telegram_id == user_tg.id).first()
+        if not admin or not admin_check(admin):
+            await update.message.reply_text("🚫 Только администраторы!")
+            return
+        lang = admin.language
+
+        from bot.handlers.feed import add_feed_post
+        add_feed_post(
+            db, "admin_post",
+            title=title,
+            text_content=body,
+            created_by=admin.telegram_id,
+        )
+
+        _log_admin_action(db, admin, f"Написал в ленту: {title}")
+        await update.message.reply_text(
+            f"✅ Пост добавлен в ленту!" if lang == "ru"
+            else f"✅ Ziņa pievienota lentē!"
+        )
+    finally:
+        db.close()
+        context.user_data.pop("admin_feed_post", None)
 
 
 async def handle_admin_points_quick_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1450,4 +1561,137 @@ def register(application):
             handle_admin_points_quick_text,
         ),
         group=7,
+    )
+
+    # Handle text messages for admin feed post
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_admin_feed_post_text,
+        ),
+        group=8,
+    )
+
+
+# ========== Admin Dating Moderation ==========
+
+async def _admin_dating_list(query, context, user, lang, db):
+    from bot.services.dating_service import get_all_profiles, get_dating_config
+    from bot.models import DatingProfileStatus
+
+    statuses = ["pending_moderation", "active", "rejected"]
+    lines = ["💕 *Анкеты знакомств / Iepazīšanās profili*\n"]
+    buttons = []
+
+    for st in statuses:
+        profiles = get_all_profiles(db, status_filter=st)
+        if profiles:
+            emoji = {"pending_moderation": "⏳", "active": "✅", "rejected": "❌"}.get(st, "❓")
+            lines.append(f"\n{emoji} *{st}* ({len(profiles)})")
+            for p in profiles:
+                pu = db.query(User).filter(User.id == p.user_id).first()
+                name = pu.first_name or pu.username or f"ID{p.user_id}" if pu else f"ID{p.user_id}"
+                gender_icon = "👨" if p.gender == "male" else "👩" if p.gender == "female" else "❓"
+                label = f"{gender_icon} {name}, {p.age or '—'}"
+                buttons.append([InlineKeyboardButton(label, callback_data=f"admin_dating_profile_{p.id}")])
+
+    buttons.append([InlineKeyboardButton("⚙️ Настройки / Iestatījumi", callback_data="admin_dating_settings")])
+    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")])
+
+    await query.edit_message_text(
+        "\n".join(lines), parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+async def _show_dating_profile(query, context, admin_user, dating_profile, lang, db):
+    from bot.services.dating_service import get_photos, get_moderation_logs
+    pu = db.query(User).filter(User.id == dating_profile.user_id).first()
+    photos = get_photos(db, dating_profile)
+    logs = get_moderation_logs(db, dating_profile.id)
+
+    gender = {"male": "Мужской / Vīrietis", "female": "Женский / Sieviete"}.get(dating_profile.gender, "—")
+    status_emoji = {
+        "pending_moderation": "⏳", "active": "✅",
+        "rejected": "❌", "blocked": "🚫"
+    }.get(dating_profile.status, "❓")
+
+    text = (
+        f"💕 *Анкета #{dating_profile.id}*\n\n"
+        f"👤 Пользователь: {pu.first_name or '—'} (@{pu.username or '—'})\n"
+        f"📝 Имя: {dating_profile.display_name or '—'}\n"
+        f"👤 Пол: {gender}\n"
+        f"🎂 Возраст: {dating_profile.age or '—'}\n"
+        f"📄 Bio: {dating_profile.bio or '—'}\n"
+        f"📞 Телефон: {dating_profile.phone or '—'}\n"
+        f"🏙 Город: {dating_profile.city or '—'}\n"
+        f"🖼 Фото: {photos.count()}/3\n"
+        f"📋 Статус: {status_emoji} {dating_profile.status}\n"
+        f"🚩 Жалоб: {dating_profile.complaint_count}"
+    )
+    if logs:
+        text += "\n\n📝 *Последние действия:*"
+        for log in logs[:5]:
+            time = log.created_at.strftime("%d.%m %H:%M")
+            text += f"\n• [{time}] {log.action}: {log.comment or '—'}"
+
+    buttons = []
+    if dating_profile.status == "pending_moderation":
+        buttons.append([InlineKeyboardButton("✅ Одобрить / Apstiprināt",
+                                             callback_data=f"admin_dating_moderate_{dating_profile.id}_approve")])
+        buttons.append([InlineKeyboardButton("❌ Отклонить / Noraidīt",
+                                             callback_data=f"admin_dating_moderate_{dating_profile.id}_reject")])
+    if dating_profile.status == "active":
+        buttons.append([InlineKeyboardButton("🚫 Заблокировать / Bloķēt",
+                                             callback_data=f"admin_dating_moderate_{dating_profile.id}_block")])
+    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="admin_dating")])
+
+    try:
+        if photos.count() > 0:
+            first_photo = photos[0]
+            await query.edit_message_caption(
+                caption=text, parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+        else:
+            await query.edit_message_text(
+                text, parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+    except Exception:
+        await query.edit_message_text(
+            text, parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+
+
+async def _admin_dating_settings(query, user, lang):
+    from bot.services.dating_service import get_dating_config
+    config = get_dating_config()
+    safe_mode = config.get("safe_mode", True)
+    price = config.get("package_price_stars", 10)
+    size = config.get("package_size", 5)
+    max_complaints = config.get("max_complaints_before_hide", 5)
+
+    text = _query_r(lang,
+                    "⚙️ *Настройки знакомств*\n\n"
+                    f"💰 Цена пакета: {price} ⭐ Stars\n"
+                    f"📸 Просмотров в пакете: {size}\n"
+                    f"🔒 Безопасный режим: {'ВКЛ' if safe_mode else 'ВЫКЛ'}\n"
+                    f"🚩 Лимит жалоб: {max_complaints}\n\n"
+                    "Изменение настроек — через конфиг бота /admin.",
+                    "⚙️ *Iepazīšanās iestatījumi*\n\n"
+                    f"💰 Paketes cena: {price} ⭐ Stars\n"
+                    f"📸 Skatījumi paketē: {size}\n"
+                    f"🔒 Drošais režīms: {'IESLĒGTS' if safe_mode else 'IZSLĒGTS'}\n"
+                    f"🚩 Sūdzību limits: {max_complaints}\n\n"
+                    "Iestatījumu maiņa — caur bota konfigurāciju /admin.")
+    buttons = [
+        [InlineKeyboardButton(f"🔒 Безопасный / Drošs режим: {'ON' if safe_mode else 'OFF'}",
+                              callback_data="admin_dating_settings_safe_mode")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="admin_dating")],
+    ]
+    await query.edit_message_text(
+        text, parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(buttons),
     )

@@ -69,6 +69,10 @@ class User(Base):
     last_activity = Column(DateTime, default=datetime.utcnow)
     dating_photo = Column(String(500), nullable=True)
     dating_bio = Column(Text, nullable=True)
+    dating_gender = Column(String(10), nullable=True)
+    dating_age = Column(Integer, nullable=True)
+    dating_interests = Column(String(500), nullable=True)
+    dating_is_active = Column(Boolean, default=False)
 
     transactions = relationship("Transaction", back_populates="user", lazy="dynamic")
     referrals_given = relationship("Referral", foreign_keys="Referral.referrer_id", back_populates="referrer", lazy="dynamic")
@@ -431,3 +435,174 @@ class PointsQR(Base):
 
     user = relationship("User", foreign_keys=[user_id])
     bar_admin = relationship("User", foreign_keys=[bar_admin_id])
+
+
+# ---------- Feed / News ----------
+class FeedPost(Base):
+    __tablename__ = "feed_posts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    post_type = Column(String(50), nullable=False)  # event / mix / specialist / admin_post
+    reference_id = Column(Integer, nullable=True)
+    title = Column(String(500), nullable=False)
+    text_content = Column(Text, nullable=True)
+    image_url = Column(String(500), nullable=True)
+    link = Column(String(500), nullable=True)
+    created_by = Column(BigInteger, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ---------- Dating ----------
+class DatingLike(Base):
+    __tablename__ = "dating_likes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    from_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    to_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    is_like = Column(Boolean, default=True)
+    is_match = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DatingMessage(Base):
+    __tablename__ = "dating_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    from_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    to_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ---------- New Dating Module Entities ----------
+
+class DatingProfileStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PENDING_MODERATION = "pending_moderation"
+    ACTIVE = "active"
+    REJECTED = "rejected"
+    BLOCKED = "blocked"
+    DELETED = "deleted"
+
+
+class DatingProfile(Base):
+    __tablename__ = "dating_profiles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    display_name = Column(String(255), nullable=True)
+    gender = Column(String(20), nullable=True)
+    age = Column(Integer, nullable=True)
+    bio = Column(Text, nullable=True)
+    phone = Column(String(50), nullable=True)
+    city = Column(String(100), default="Daugavpils")
+    status = Column(String(20), default=DatingProfileStatus.DRAFT.value)
+    rules_accepted = Column(Boolean, default=False)
+    complaint_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", backref="dating_profile", uselist=False)
+    photos = relationship("DatingPhoto", back_populates="profile", lazy="dynamic",
+                          cascade="all, delete-orphan",
+                          order_by="DatingPhoto.sort_order")
+    payments = relationship("DatingPayment", back_populates="profile", lazy="dynamic")
+    packages = relationship("DatingAccessPackage", back_populates="profile", lazy="dynamic")
+    profile_views = relationship("DatingProfileView",
+                                  foreign_keys="DatingProfileView.target_profile_id",
+                                  back_populates="target_profile", lazy="dynamic")
+    complaints_received = relationship("DatingComplaint",
+                                        foreign_keys="DatingComplaint.target_profile_id",
+                                        back_populates="target_profile", lazy="dynamic")
+    moderation_logs = relationship("DatingModerationLog",
+                                    back_populates="profile", lazy="dynamic")
+
+
+class DatingPhoto(Base):
+    __tablename__ = "dating_photos"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    profile_id = Column(Integer, ForeignKey("dating_profiles.id"), nullable=False, index=True)
+    telegram_file_id = Column(String(500), nullable=False)
+    moderation_status = Column(String(20), default=ModerationStatus.APPROVED.value)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    profile = relationship("DatingProfile", back_populates="photos")
+
+
+class DatingPayment(Base):
+    __tablename__ = "dating_payments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    profile_id = Column(Integer, ForeignKey("dating_profiles.id"), nullable=False, index=True)
+    telegram_user_id = Column(BigInteger, nullable=False)
+    amount_stars = Column(Integer, nullable=False)
+    package_size = Column(Integer, default=5)
+    status = Column(String(20), default="pending")
+    invoice_payload = Column(String(255), unique=True, nullable=True, index=True)
+    telegram_payment_charge_id = Column(String(255), nullable=True)
+    provider_charge_id = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    profile = relationship("DatingProfile", back_populates="payments")
+    package = relationship("DatingAccessPackage", uselist=False, back_populates="payment")
+
+
+class DatingAccessPackage(Base):
+    __tablename__ = "dating_access_packages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    payment_id = Column(Integer, ForeignKey("dating_payments.id"), nullable=False)
+    profile_id = Column(Integer, ForeignKey("dating_profiles.id"), nullable=False, index=True)
+    total_views = Column(Integer, default=5)
+    used_views = Column(Integer, default=0)
+    status = Column(String(20), default="active")
+    activated_at = Column(DateTime, default=datetime.utcnow)
+    expired_at = Column(DateTime, nullable=True)
+
+    payment = relationship("DatingPayment", back_populates="package")
+    profile = relationship("DatingProfile", back_populates="packages")
+    views = relationship("DatingProfileView", back_populates="package", lazy="dynamic")
+
+
+class DatingProfileView(Base):
+    __tablename__ = "dating_profile_views"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    package_id = Column(Integer, ForeignKey("dating_access_packages.id"), nullable=False)
+    viewer_profile_id = Column(Integer, ForeignKey("dating_profiles.id"), nullable=False)
+    target_profile_id = Column(Integer, ForeignKey("dating_profiles.id"), nullable=False)
+    shown_at = Column(DateTime, default=datetime.utcnow)
+
+    package = relationship("DatingAccessPackage", back_populates="views")
+    viewer_profile = relationship("DatingProfile", foreign_keys=[viewer_profile_id])
+    target_profile = relationship("DatingProfile", foreign_keys=[target_profile_id],
+                                   back_populates="profile_views")
+
+
+class DatingComplaint(Base):
+    __tablename__ = "dating_complaints"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    target_profile_id = Column(Integer, ForeignKey("dating_profiles.id"), nullable=False, index=True)
+    reporter_telegram_user_id = Column(BigInteger, nullable=False)
+    reason = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    target_profile = relationship("DatingProfile", foreign_keys=[target_profile_id],
+                                   back_populates="complaints_received")
+
+
+class DatingModerationLog(Base):
+    __tablename__ = "dating_moderation_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    profile_id = Column(Integer, ForeignKey("dating_profiles.id"), nullable=False)
+    moderator_id = Column(BigInteger, nullable=True)
+    action = Column(String(50), nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    profile = relationship("DatingProfile", back_populates="moderation_logs")

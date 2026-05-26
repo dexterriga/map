@@ -1,4 +1,4 @@
-"""DJ/Specialist registration and portfolio form (conversation)."""
+"""Specialist registration and portfolio form (conversation)."""
 
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -33,9 +33,9 @@ async def dj_register_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["dj_reg"] = {}
     text = (
-        "🎧 *Регистрация DJ / специалиста*\n\n"
+        "🎭 *Регистрация специалиста*\n\n"
         "Шаг 1/6: Введи своё *сценическое имя* (или имя):" if lang == "ru"
-        else "🎧 *DJ / speciālista reģistrācija*\n\n"
+        else "🎭 *Speciālista reģistrācija*\n\n"
              "1/6: Ievadi savu *skatuves vārdu* (vai vārdu):"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
@@ -283,9 +283,12 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.add(specialist)
         db.commit()
 
-        # Update user role to DJ
+        # Update user role based on category
         if user.role == "user":
-            user.role = "dj_performer"
+            if reg_data.get("category") == "DJ":
+                user.role = "dj_performer"
+            else:
+                user.role = "specialist"
             db.commit()
 
         # Award bonus points for DJ registration
@@ -295,9 +298,26 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                      "DJ / speciālista reģistrācija")
 
         context.user_data.pop("dj_reg", None)
+
+        # Add to feed when specialist is created
+        from bot.handlers.feed import add_feed_post
+        add_feed_post(
+            db, "specialist",
+            title=f"🎭 {reg_data.get('name', '')} — {reg_data.get('category', '')}",
+            text_content=reg_data.get("description", "")[:200],
+            image_url=reg_data.get("photo_url"),
+            created_by=user.telegram_id,
+            reference_id=specialist.id,
+        )
+
+        is_dj = reg_data.get("category") == "DJ"
+        extra = (
+            "\n\n🎧 Ты можешь загружать свои миксы через /uploadmix."
+            if is_dj else ""
+        )
         await query.edit_message_text(
             f"✅ *{'Анкета отправлена на модерацию!' if lang == 'ru' else 'Anketa nosūtīta moderācijai!'}*\n\n"
-            f"{'После проверки ты появишься в каталоге специалистов.' if lang == 'ru' else 'Pēc pārbaudes tu parādīsies speciālistu katalogā.'}\n\n"
+            f"{'После проверки ты появишься в каталоге специалистов.' if lang == 'ru' else 'Pēc pārbaudes tu parādīsies speciālistu katalogā.'}{extra}\n\n"
             f"💰 **+{POINTS['DJ_REGISTRATION']} pts** {'за регистрацию!' if lang == 'ru' else 'par reģistrāciju!'}",
             parse_mode="Markdown",
             reply_markup=back_keyboard("menu_main"),
@@ -317,8 +337,8 @@ def get_conversation_handler():
     return ConversationHandler(
         entry_points=[
             CommandHandler("djregister", dj_register_start),
-            MessageHandler(filters.Text("🎤 Стать DJ"), dj_register_start),
-            MessageHandler(filters.Text("🎤 Kļūt par DJ"), dj_register_start),
+            MessageHandler(filters.Text("🎤 Я – специалист"), dj_register_start),
+            MessageHandler(filters.Text("🎤 Es esmu speciālists"), dj_register_start),
         ],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_name)],

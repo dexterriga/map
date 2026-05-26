@@ -9,9 +9,9 @@ def main_reply_keyboard(lang="ru", is_admin=False, is_bar_admin=False):
             [KeyboardButton("📅 Афиша"), KeyboardButton("⭐ Бонусы")],
             [KeyboardButton("🎭 Специалисты"), KeyboardButton("🎧 DJ Миксы")],
             [KeyboardButton("👤 Профиль"), KeyboardButton("👥 Пригласи друга")],
-            [KeyboardButton("🎤 Стать DJ"), KeyboardButton("📸 Сканировать QR")],
+            [KeyboardButton("🎤 Я – специалист"), KeyboardButton("📸 Сканировать QR")],
             [KeyboardButton("💕 Знакомства")],
-            [KeyboardButton("📩 Администратору"), KeyboardButton("ℹ️ Помощь")],
+            [KeyboardButton("📰 Лента"), KeyboardButton("📩 Администратору"), KeyboardButton("ℹ️ Помощь")],
             [KeyboardButton("🌐 LV / RU")],
         ]
     else:
@@ -19,9 +19,9 @@ def main_reply_keyboard(lang="ru", is_admin=False, is_bar_admin=False):
             [KeyboardButton("📅 Afiša"), KeyboardButton("⭐ Bonusi")],
             [KeyboardButton("🎭 Speciālisti"), KeyboardButton("🎧 Miksi")],
             [KeyboardButton("👤 Profils"), KeyboardButton("👥 Uzaicini draugu")],
-            [KeyboardButton("🎤 Kļūt par DJ"), KeyboardButton("📸 Skenēt QR")],
+            [KeyboardButton("🎤 Es esmu speciālists"), KeyboardButton("📸 Skenēt QR")],
             [KeyboardButton("💕 Iepazīšanās")],
-            [KeyboardButton("📩 Administratoram"), KeyboardButton("ℹ️ Palīdzība")],
+            [KeyboardButton("📰 Jaunumi"), KeyboardButton("📩 Administratoram"), KeyboardButton("ℹ️ Palīdzība")],
             [KeyboardButton("🌐 RU / LV")],
         ]
     if is_admin:
@@ -222,6 +222,8 @@ def admin_keyboard():
         [InlineKeyboardButton("📝 Журнал действий", callback_data="admin_log")],
         [InlineKeyboardButton("🍸 Начислить бонусы (бар)", callback_data="admin_bar_earn")],
         [InlineKeyboardButton("📢 Сделать пост / Publicēt", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("📝 Написать в ленту / Lentē", callback_data="admin_feed_post")],
+        [InlineKeyboardButton("💕 Анкеты знакомств / Iepazīšanās", callback_data="admin_dating")],
         [InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")],
     ]
     return InlineKeyboardMarkup(buttons)
@@ -250,6 +252,7 @@ def role_selection_keyboard(user_id):
     buttons = [
         [InlineKeyboardButton("User", callback_data=f"set_role_{user_id}_user")],
         [InlineKeyboardButton("DJ / Performer", callback_data=f"set_role_{user_id}_dj_performer")],
+        [InlineKeyboardButton("Specialist / Speciālists", callback_data=f"set_role_{user_id}_specialist")],
         [InlineKeyboardButton("Bar Admin", callback_data=f"set_role_{user_id}_bar_admin")],
         [InlineKeyboardButton("Moderator", callback_data=f"set_role_{user_id}_moderator")],
         [InlineKeyboardButton("Admin", callback_data=f"set_role_{user_id}_admin")],
@@ -281,6 +284,67 @@ def language_keyboard():
 def back_keyboard(callback_data="menu_main"):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("◀️ Назад / Atpakaļ", callback_data=callback_data)]
+    ])
+
+
+def dating_main_keyboard(lang="ru"):
+    buttons = [
+        [InlineKeyboardButton("👀 Смотреть анкеты / Skatīt profilus", callback_data="dating_browse")],
+        [InlineKeyboardButton("📝 Создать анкету / Izveidot profilu", callback_data="dating_create")],
+        [InlineKeyboardButton("📋 Моя анкета / Mans profils", callback_data="dating_my_profile")],
+        [InlineKeyboardButton("✏️ Редактировать / Rediģēt", callback_data="dating_edit")],
+        [InlineKeyboardButton("👀 Просмотреть анкеты / Skatīt profilus", callback_data="dating_browse")],
+        [InlineKeyboardButton("📦 Мои покупки / Mani pirkumi", callback_data="dating_purchases")],
+        [InlineKeyboardButton("ℹ️ Правила / Noteikumi", callback_data="dating_rules")],
+        [InlineKeyboardButton("📩 Поддержка / Atbalsts", callback_data="dating_support")],
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def dating_gender_keyboard(edit_mode=False):
+    buttons = [
+        [InlineKeyboardButton("👨 Мужской / Vīrietis", callback_data="dating_set_gender_male")],
+        [InlineKeyboardButton("👩 Женский / Sieviete", callback_data="dating_set_gender_female")],
+    ]
+    if edit_mode:
+        buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="dating_edit")])
+    else:
+        buttons.append([InlineKeyboardButton("❌ Отмена / Atcelt", callback_data="dating_wizard_cancel")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def dating_edit_keyboard():
+    buttons = [
+        [InlineKeyboardButton("👤 Пол / Dzimums", callback_data="dating_edit_gender")],
+        [InlineKeyboardButton("🎂 Возраст / Vecums", callback_data="dating_edit_age")],
+        [InlineKeyboardButton("📝 Имя / Vārds", callback_data="dating_edit_name")],
+        [InlineKeyboardButton("📄 О себе / Par sevi", callback_data="dating_edit_bio")],
+        [InlineKeyboardButton("📞 Телефон / Tālrunis", callback_data="dating_edit_phone")],
+        [InlineKeyboardButton("🏙 Город / Pilsēta", callback_data="dating_edit_city")],
+        [InlineKeyboardButton("🖼 Фото / Foto", callback_data="dating_edit_photo")],
+        [InlineKeyboardButton("📋 Правила / Noteikumi", callback_data="dating_edit_rules")],
+        [InlineKeyboardButton("◀️ Назад / Atpakaļ", callback_data="dating_main")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def dating_browse_keyboard(target_id=None):
+    buttons = []
+    if target_id:
+        buttons.append([
+            InlineKeyboardButton("👎", callback_data="dating_dislike"),
+            InlineKeyboardButton("❤️", callback_data=f"dating_like_{target_id}"),
+        ])
+        buttons.append([InlineKeyboardButton("🚩 Пожаловаться / Sūdzēties", callback_data="dating_complaint")])
+    buttons.append([InlineKeyboardButton("◀️ Назад / Atpakaļ", callback_data="dating_main")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def dating_purchase_keyboard(price, lang="ru"):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"⭐ Купить за {price} Stars", callback_data="dating_buy_confirm")],
+        [InlineKeyboardButton("◀️ Назад / Atpakaļ", callback_data="dating_main")],
     ])
 
 

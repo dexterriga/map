@@ -55,6 +55,7 @@ REWARDS = {
 ROLES = {
     "user": 0,
     "dj_performer": 1,
+    "specialist": 1,
     "bar_admin": 2,
     "moderator": 2,
     "admin": 3,
@@ -64,6 +65,7 @@ ROLES = {
 ROLE_NAMES_RU = {
     "user": "Пользователь",
     "dj_performer": "DJ / Исполнитель",
+    "specialist": "Специалист",
     "bar_admin": "Bar Admin",
     "moderator": "Модератор",
     "admin": "Администратор",
@@ -73,6 +75,7 @@ ROLE_NAMES_RU = {
 ROLE_NAMES_LV = {
     "user": "Lietotājs",
     "dj_performer": "DJ / Izpildītājs",
+    "specialist": "Speciālists",
     "bar_admin": "Bar Admin",
     "moderator": "Moderators",
     "admin": "Administrators",

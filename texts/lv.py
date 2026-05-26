@@ -170,3 +170,33 @@ DESCRIPTION = (
     "Pasākumu izveide, miksu moderācija, lietotāju pārvaldība\n\n"
     "🔗 *Kontakti:* @mapdaugavpilsbot"
 )
+
+# ---- Dating module texts ----
+DATING_MENU = "💕 *Iepazīšanās*"
+DATING_CREATE = "📝 *Profila izveide*"
+DATING_EDIT = "✏️ *Rediģēt profilu*"
+DATING_MY_PROFILE = "📋 *Mans profils*"
+DATING_BROWSE = "👀 *Profilu apskate*"
+DATING_BUY = "⭐ *Pirkt skatījumus*"
+DATING_PURCHASES = "📦 *Mani pirkumi*"
+DATING_RULES = (
+    "📋 *Iepazīšanās sadaļas noteikumi*\n\n"
+    "1. Aizliegti apvainojumi un nepieklājīga uzvedība\n"
+    "2. Aizliegta reklāma un surogātpasts\n"
+    "3. Fotoattēliem jābūt reāliem\n"
+    "4. Nedrīkst uzdoties par citu personu\n"
+    "5. Administrācijai ir tiesības bloķēt profilu bez paskaidrojuma\n\n"
+    "Noteikumu pārkāpšana noved pie profila bloķēšanas."
+)
+DATING_NO_PROFILE = "Tev vēl nav profila. Izveido to, lai sāktu iepazīties!"
+DATING_PENDING = "⏳ Tavs profils tiek moderēts. Gaidi administratora pārbaudi."
+DATING_REJECTED = "❌ Tavs profils ir noraidīts. Sazinies ar administratoru, lai uzzinātu iemeslus."
+DATING_BLOCKED = "🚫 Tavs profils ir bloķēts. Sazinies ar administratoru."
+DATING_ACTIVE = "✅ Profils aktīvs"
+DATING_VIEWS_LEFT = "📸 Atlikuši skatījumi: {count}"
+DATING_NO_VIEWS = "😕 Tev nav aktīvu skatījumu. Pērc skatījumu paketi, lai redzētu profilus!"
+DATING_NO_CANDIDATES = "😕 Pašlaik nav jaunu profilu. Ieskaties vēlāk!"
+DATING_ALL_VIEWED = "🎉 Tu esi apskatījis visus pieejamos profilus! Pērc vēl skatījumus, lai turpinātu!"
+DATING_PHOTO_PROMPT = "📤 Nosūti foto (līdz 3 gab.). Pēc visu foto nosūtīšanas nospied /done."
+DATING_RULES_ACCEPT = "Apstiprini piekrišanu noteikumiem?"
+DATING_SUPPORT = "📩 Visos jautājumos sazinies ar administratoru caur pogu «📩 Administratoram» galvenajā izvēlnē."

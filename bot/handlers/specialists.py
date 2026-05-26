@@ -27,7 +27,7 @@ async def specialists(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "специалистов для твоего мероприятия.\n\n"
                 "👇 Выбери категорию:\n\n"
                 "— *Хочешь стать специалистом?*\n"
-                "Нажми «🎤 Стать DJ» в главном меню или используй /djregister,\n"
+                "Нажми «🎤 Я – специалист» в главном меню или используй /djregister,\n"
                 "заполни анкету и после модерации ты появишься в каталоге!"
             )
         else:
@@ -37,7 +37,7 @@ async def specialists(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "speciālistus savam pasākumam.\n\n"
                 "👇 Izvēlies kategoriju:\n\n"
                 "— *Vēlies kļūt par speciālistu?*\n"
-                "Nospied «🎤 Kļūt par DJ» galvenajā izvēlnē vai izmanto /djregister,\n"
+                "Nospied «🎤 Es esmu speciālists» galvenajā izvēlnē vai izmanto /djregister,\n"
                 "aizpildi anketu un pēc moderācijas tu parādīsies katalogā!"
             )
         await update.message.reply_text(
